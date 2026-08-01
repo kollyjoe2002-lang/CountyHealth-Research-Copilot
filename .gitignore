@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Databases and large local data
+*.duckdb
+*.db
+database/*.duckdb
+data/raw/
+data/processed/
+1_data/raw/
+1_data/processed/
+
+# Outputs
+outputs/
+*.log
+*.tmp
+
+# Environment
+.env
+.env.*
+*.pem
+*.key
+
+# Python packaging
+build/
+dist/
+*.egg-info/
