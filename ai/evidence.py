@@ -632,6 +632,7 @@ def _interpret_county_profile(
             (
                 column
                 for column in [
+                    "absolute_change_2000_2019",
                     "absolute_change",
                     "yll_rate_change",
                     "change",

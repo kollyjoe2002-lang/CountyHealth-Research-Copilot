@@ -18,22 +18,48 @@ from ai.planner import build_analysis_plan  # noqa: E402
 from ai.resolver import resolve_plan  # noqa: E402
 
 
-QUESTIONS = [
-    (
-        "Compare diabetes burden among Black and "
-        "White adults in 2019."
-    ),
-    (
-        "Show the trend in ischemic heart disease "
-        "in Albany County, Wyoming from 2000 to 2019."
-    ),
-    (
-        "Which counties had the highest diabetes "
-        "YLL rates in 2019?"
-    ),
-    (
-        "Tell me about Albany County, Wyoming."
-    ),
+TEST_CASES = [
+    {
+        "question": (
+            "Compare diabetes burden among Black and "
+            "White adults in 2019."
+        ),
+        "expected_evidence_items": 1,
+        "expected_source_functions": {
+            "get_county_disparity_ranking",
+        },
+    },
+    {
+        "question": (
+            "Show the trend in ischemic heart disease "
+            "in Albany County, Wyoming from 2000 to 2019."
+        ),
+        "expected_evidence_items": 1,
+        "expected_source_functions": {
+            "filter_dataframe",
+        },
+    },
+    {
+        "question": (
+            "Which counties had the highest diabetes "
+            "YLL rates in 2019?"
+        ),
+        "expected_evidence_items": 1,
+        "expected_source_functions": {
+            "get_county_ranking",
+        },
+    },
+    {
+        "question": (
+            "Tell me about Albany County, Wyoming."
+        ),
+        "expected_evidence_items": 3,
+        "expected_source_functions": {
+            "get_bmi_summary",
+            "get_top_causes",
+            "get_long_term_change",
+        },
+    },
 ]
 
 
@@ -42,9 +68,17 @@ def main() -> None:
     print("AI Plan Executor Validation")
     print("=" * 80)
 
-    for question in QUESTIONS:
-        classified = classify_question(question)
-        plan = build_analysis_plan(classified)
+    for test_case in TEST_CASES:
+        question = test_case["question"]
+
+        classified = classify_question(
+            question
+        )
+
+        plan = build_analysis_plan(
+            classified
+        )
+
         resolved_plan = resolve_plan(
             classified,
             plan,
@@ -58,7 +92,43 @@ def main() -> None:
         print("-" * 80)
         print(f"Question: {question}")
         print(f"Intent: {bundle.intent.value}")
-        print(f"Evidence items: {len(bundle.items)}")
+        print(
+            f"Evidence items: "
+            f"{len(bundle.items)}"
+        )
+
+        expected_count = int(
+            test_case[
+                "expected_evidence_items"
+            ]
+        )
+
+        if len(bundle.items) != expected_count:
+            raise AssertionError(
+                f"Expected {expected_count} evidence item(s), "
+                f"received {len(bundle.items)}."
+            )
+
+        actual_source_functions = {
+            item.source_function
+            for item in bundle.items
+        }
+
+        expected_source_functions = set(
+            test_case[
+                "expected_source_functions"
+            ]
+        )
+
+        if (
+            actual_source_functions
+            != expected_source_functions
+        ):
+            raise AssertionError(
+                "Unexpected evidence sources. "
+                f"Expected {sorted(expected_source_functions)}, "
+                f"received {sorted(actual_source_functions)}."
+            )
 
         for item in bundle.items:
             print(
@@ -66,22 +136,30 @@ def main() -> None:
                 f"[{item.source_function}]"
             )
 
-            if isinstance(item.data, pd.DataFrame):
+            if isinstance(
+                item.data,
+                pd.DataFrame,
+            ):
                 print(
-                    f"    Rows: {len(item.data):,}; "
-                    f"Columns: {len(item.data.columns)}"
+                    f"    Rows: "
+                    f"{len(item.data):,}; "
+                    f"Columns: "
+                    f"{len(item.data.columns)}"
                 )
 
                 if item.data.empty:
                     raise AssertionError(
-                        f"Evidence item '{item.title}' is empty."
+                        f"Evidence item "
+                        f"'{item.title}' is empty."
                     )
 
         if bundle.warnings:
             print("Warnings:")
 
             for warning in bundle.warnings:
-                print(f"  - {warning}")
+                print(
+                    f"  - {warning}"
+                )
 
     print()
     print("=" * 80)

@@ -12,6 +12,11 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
+from ai.formatter import (
+    format_evidence_table,
+    table_caption,
+)
+
 from ai.models import ResearchReport
 from ai.report_writer import report_to_markdown
 
@@ -388,12 +393,29 @@ def build_docx_document(
                 pd.DataFrame,
             )
         ):
+            formatted_table = format_evidence_table(
+                item.source_function,
+                item.data,
+            )
+
+            caption_text = table_caption(
+                item.source_function,
+                item.title,
+            )
+
+            caption = document.add_paragraph()
+
+            caption_run = caption.add_run(
+                f"Table {index}. {caption_text}"
+            )
+
+            caption_run.bold = True
+            caption_run.font.size = Pt(9)
+
             _add_dataframe_table(
                 document,
-                item.data,
-                maximum_rows=(
-                    evidence_row_limit
-                ),
+                formatted_table,
+                maximum_rows=evidence_row_limit,
             )
 
     document.add_heading(

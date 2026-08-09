@@ -150,6 +150,10 @@ def execute_plan(
     Resolver steps are skipped because they have already populated
     the plan parameters. Every analytical result is stored as an
     EvidenceItem with its originating function and parameters.
+
+    When a filtering step returns the same DataFrame as the immediately
+    preceding analytical step, the redundant earlier evidence item is
+    replaced by the filtered evidence item.
     """
     if plan.unresolved_items:
         raise ExecutionError(
@@ -178,10 +182,15 @@ def execute_plan(
         if result is None:
             continue
 
-        previous_data = result
+        is_redundant_filter = (
+            step.function_name == "filter_dataframe"
+            and previous_data is not None
+            and result.equals(previous_data)
+            and bool(evidence_items)
+        )
 
-        evidence_items.append(
-            EvidenceItem(
+        if is_redundant_filter:
+            evidence_items[-1] = EvidenceItem(
                 evidence_type="dataframe",
                 title=_evidence_title(step),
                 data=result,
@@ -189,7 +198,26 @@ def execute_plan(
                 parameters=dict(step.parameters),
                 interpretation_note=step.purpose,
             )
-        )
+
+            warnings.append(
+                "The requested year filter matched the full available "
+                "trend period, so the duplicate unfiltered evidence "
+                "table was suppressed."
+            )
+
+        else:
+            evidence_items.append(
+                EvidenceItem(
+                    evidence_type="dataframe",
+                    title=_evidence_title(step),
+                    data=result,
+                    source_function=step.function_name,
+                    parameters=dict(step.parameters),
+                    interpretation_note=step.purpose,
+                )
+            )
+
+        previous_data = result
 
         if result.empty:
             warnings.append(
