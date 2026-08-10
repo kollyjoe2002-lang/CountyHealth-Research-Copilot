@@ -779,3 +779,59 @@ def get_county_disparity_trend(
         sql,
         parameters,
     )
+@st.cache_data(show_spinner=False)
+def get_county_ranking(
+    cause_id: int,
+    year: int,
+    limit: int | None = None,
+) -> pd.DataFrame:
+    """
+    Return current-county national rankings for one cause and year.
+
+    Only current counties from the harmonized geography layer are
+    included. Historical aliases, unavailable counties, state rows,
+    and national rows are excluded.
+    """
+    sql = """
+        SELECT
+            national_display_order,
+            national_county_rank,
+            fips,
+            location_name,
+            cause_id,
+            cause_name,
+            year,
+            yll_rate,
+            lower,
+            upper,
+            counties_with_estimate,
+            burden_percentile
+        FROM analytics.vw_current_county_cause_rankings
+        WHERE cause_id = ?
+          AND year = ?
+        ORDER BY national_display_order
+    """
+
+    parameters: list[Any] = [
+        int(cause_id),
+        int(year),
+    ]
+
+    dataframe = run_query(
+        sql,
+        parameters,
+    )
+
+    if limit is not None:
+        limit_value = int(limit)
+
+        if limit_value <= 0:
+            raise ValueError(
+                "limit must be greater than zero."
+            )
+
+        dataframe = dataframe.head(
+            limit_value
+        ).copy()
+
+    return dataframe
