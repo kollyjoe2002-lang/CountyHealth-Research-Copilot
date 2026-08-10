@@ -33,6 +33,40 @@ def _report_title(
 def _methods_text(
     bundle: EvidenceBundle,
 ) -> str:
+    if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
+        group_a_name = str(
+            bundle.context.get(
+                "group_a_name",
+                "Group A",
+            )
+        )
+
+        group_b_name = str(
+            bundle.context.get(
+                "group_b_name",
+                "Group B",
+            )
+        )
+
+        dimension = str(
+            bundle.context.get(
+                "dimension",
+                "demographic group",
+            )
+        )
+
+        return (
+            f"The analysis compared {group_a_name} with "
+            f"{group_b_name} using county-level "
+            "high-BMI-attributable years-of-life-lost rates. "
+            f"The comparison dimension was {dimension}. "
+            f"The signed disparity gap was calculated as the "
+            f"{group_a_name} rate minus the {group_b_name} rate. "
+            f"Positive values indicate a higher estimated burden "
+            f"for {group_a_name}, while negative values indicate "
+            f"a higher estimated burden for {group_b_name}."
+        )
+
     methods_map = {
         AnalysisIntent.COUNTY_PROFILE: (
             "The analysis combined county-level BMI indicators, "
@@ -45,14 +79,6 @@ def _methods_text(
             "high-BMI-attributable years-of-life-lost rates over "
             "the requested period. Absolute and relative changes "
             "were calculated from the first and last available years."
-        ),
-        AnalysisIntent.DEMOGRAPHIC_DISPARITY: (
-            "The analysis compared two demographic groups using "
-            "county-level high-BMI-attributable years-of-life-lost "
-            "rates. The signed gap was calculated as Group A minus "
-            "Group B. Positive values indicate higher burden in "
-            "Group A, while negative values indicate higher burden "
-            "in Group B."
         ),
         AnalysisIntent.COUNTY_RANKING: (
             "The analysis ranked harmonized current U.S. counties "
@@ -93,11 +119,16 @@ def _limitations(
     ]
 
     if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
-        limitations.append(
-            (
-                "Relative disparity estimates use Group B as the "
-                "reference denominator."
+        group_b_name = str(
+            bundle.context.get(
+                "group_b_name",
+                "Group B",
             )
+        )
+
+        limitations.append(
+            "Relative disparity estimates use "
+            f"{group_b_name} as the reference denominator."
         )
 
     return limitations

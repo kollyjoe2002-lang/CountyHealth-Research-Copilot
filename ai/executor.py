@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
 
-import pandas as pd
+try:
+    import pandas as pd  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # pragma: no cover
+    pd = None  # type: ignore[assignment]
 
 from ai.models import (
     AnalysisPlan,
@@ -230,8 +233,11 @@ def execute_plan(
         )
 
     return EvidenceBundle(
-        question=plan.question,
-        intent=plan.intent,
-        items=evidence_items,
-        warnings=warnings,
-    )
+    question=plan.question,
+    intent=plan.intent,
+    items=evidence_items,
+    warnings=warnings,
+    context=dict(
+        plan.resolved_context
+    ),
+)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import pandas as pd
 
@@ -445,12 +445,13 @@ def _format_disparity_ranking(
             "FIPS": display[
                 "fips"
             ].map(_format_fips),
-            "Group A Rate": display[
-                "group_a_value"
-            ].map(_format_decimal),
-            "Group B Rate": display[
-                "group_b_value"
-            ].map(_format_decimal),
+            "Comparison Group Rate": display[
+    "group_a_value"
+].map(_format_decimal),
+
+"Reference Group Rate": display[
+    "group_b_value"
+].map(_format_decimal),
             "Signed Gap": display[
                 "absolute_gap"
             ].map(_format_decimal),

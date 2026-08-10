@@ -527,6 +527,17 @@ def resolve_plan(
                 f"{groups['group_a_name']} versus "
                 f"{groups['group_b_name']}."
             )
+            plan.resolved_context.update(
+                {
+                    "dimension": groups["dimension"],
+                    "group_a_id": groups["group_a_id"],
+                    "group_a_name": groups["group_a_name"],
+                    "group_b_id": groups["group_b_id"],
+                    "group_b_name": groups["group_b_name"],
+                    "cause_id": cause["cause_id"],
+                    "cause_name": cause["cause_name"],
+                }
+            )
 
         elif plan.intent == (
             AnalysisIntent.COUNTY_PROFILE

@@ -52,6 +52,7 @@ class AnalysisPlan:
     steps: list[AnalysisStep]
     assumptions: list[str] = field(default_factory=list)
     unresolved_items: list[str] = field(default_factory=list)
+    resolved_context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -70,6 +71,7 @@ class EvidenceBundle:
     intent: AnalysisIntent
     items: list[EvidenceItem]
     warnings: list[str] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

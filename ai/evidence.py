@@ -162,6 +162,20 @@ def _interpret_disparity(
         ranking["absolute_gap"] == 0
     ].copy()
 
+    group_a_name = str(
+        bundle.context.get(
+            "group_a_name",
+            "Group A",
+        )
+    )
+
+    group_b_name = str(
+        bundle.context.get(
+            "group_b_name",
+            "Group B",
+        )
+    )
+    
     findings = [
         (
             f"{len(ranking):,} current counties had complete estimates "
@@ -173,16 +187,16 @@ def _interpret_disparity(
             "YLL-rate units."
         ),
         (
-            f"Group A had the higher estimated rate in "
-            f"{len(positive):,} counties, while Group B had the higher "
-            f"rate in {len(negative):,} counties."
+            f"{group_a_name} had the higher estimated rate in "
+            f"{len(positive):,} counties, while {group_b_name} had the "
+            f"higher estimated rate in {len(negative):,} counties."
         ),
     ]
 
     if not equal.empty:
         findings.append(
-            f"The two groups had equal estimated rates in "
-            f"{len(equal):,} counties."
+            f"{group_a_name} and {group_b_name} had equal estimated "
+            f"rates in {len(equal):,} counties."
         )
 
     if not positive.empty:
@@ -204,12 +218,10 @@ def _interpret_disparity(
         )
 
         findings.append(
-            (
-                f"The largest positive disparity occurred in "
-                f"{largest['location_name']}, with a signed gap of "
-                f"{_format_number(largest['absolute_gap'])}"
-                f"{relative_text}."
-            )
+            f"The largest positive disparity occurred in "
+            f"{largest['location_name']}, with a signed gap of "
+            f"{_format_number(largest['absolute_gap'])}"
+            f"{relative_text}."
         )
 
     if not negative.empty:
@@ -231,12 +243,10 @@ def _interpret_disparity(
         )
 
         findings.append(
-            (
-                f"The largest reverse disparity occurred in "
-                f"{reverse['location_name']}, with a signed gap of "
-                f"{_format_number(reverse['absolute_gap'])}"
-                f"{relative_text}."
-            )
+            f"The largest reverse disparity occurred in "
+            f"{reverse['location_name']}, with a signed gap of "
+            f"{_format_number(reverse['absolute_gap'])}"
+            f"{relative_text}."
         )
 
     return findings
