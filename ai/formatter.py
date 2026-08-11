@@ -417,8 +417,30 @@ def _format_cause_trend(
 
 def _format_disparity_ranking(
     dataframe: pd.DataFrame,
+    *,
+    context: dict[str, object] | None = None,
 ) -> pd.DataFrame:
+    """
+    Format county demographic disparity evidence using
+    resolved demographic labels when available.
+    """
     display = dataframe.copy()
+
+    context = context or {}
+
+    group_a_name = str(
+        context.get(
+            "group_a_name",
+            "Comparison Group",
+        )
+    )
+
+    group_b_name = str(
+        context.get(
+            "group_b_name",
+            "Reference Group",
+        )
+    )
 
     for column in [
         "group_a_value",
@@ -445,13 +467,12 @@ def _format_disparity_ranking(
             "FIPS": display[
                 "fips"
             ].map(_format_fips),
-            "Comparison Group Rate": display[
-    "group_a_value"
-].map(_format_decimal),
-
-"Reference Group Rate": display[
-    "group_b_value"
-].map(_format_decimal),
+            f"{group_a_name} Rate": display[
+                "group_a_value"
+            ].map(_format_decimal),
+            f"{group_b_name} Rate": display[
+                "group_b_value"
+            ].map(_format_decimal),
             "Signed Gap": display[
                 "absolute_gap"
             ].map(_format_decimal),
@@ -566,10 +587,15 @@ FORMAT_RULES: dict[
 def format_evidence_table(
     source_function: str,
     dataframe: pd.DataFrame,
+    *,
+    context: dict[str, object] | None = None,
 ) -> pd.DataFrame:
     """
     Convert a raw analytical DataFrame into a compact,
     publication-ready table.
+
+    Context may contain resolved analytical metadata such as
+    demographic group names.
 
     Unknown evidence types are returned as a copy of the original
     DataFrame so the exporter remains forward-compatible.
@@ -597,6 +623,15 @@ def format_evidence_table(
         rule.columns,
         source_function=source_function,
     )
+
+    if (
+        source_function
+        == "get_county_disparity_ranking"
+    ):
+        return _format_disparity_ranking(
+            dataframe.copy(),
+            context=context,
+        )
 
     if rule.formatter is not None:
         return rule.formatter(

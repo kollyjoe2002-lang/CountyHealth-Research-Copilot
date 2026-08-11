@@ -8,6 +8,7 @@ from typing import Any
 
 import pandas as pd
 from docx import Document
+from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
@@ -16,7 +17,6 @@ from ai.formatter import (
     format_evidence_table,
     table_caption,
 )
-
 from ai.models import ResearchReport
 from ai.report_writer import report_to_markdown
 
@@ -123,6 +123,7 @@ def _set_document_defaults(
         style = document.styles[
             style_name
         ]
+
         style.font.name = "Aptos"
         style.font.size = Pt(size)
 
@@ -131,6 +132,9 @@ def _add_report_header(
     document: Document,
     report: ResearchReport,
 ) -> None:
+    """
+    Add the report title and generation metadata.
+    """
     title = document.add_heading(
         report.title,
         level=0,
@@ -170,6 +174,9 @@ def _add_bullets(
     document: Document,
     values: list[str],
 ) -> None:
+    """
+    Add a list of bullet points.
+    """
     for value in values:
         document.add_paragraph(
             value,
@@ -180,6 +187,9 @@ def _add_bullets(
 def _clean_cell_value(
     value: Any,
 ) -> str:
+    """
+    Convert table-cell values to display text.
+    """
     if value is None or pd.isna(value):
         return ""
 
@@ -189,20 +199,194 @@ def _clean_cell_value(
     return str(value)
 
 
+def _column_width_inches(
+    column_name: str,
+) -> float:
+    """
+    Return a practical DOCX width for a formatted evidence column.
+
+    Widths are based on semantic content rather than equal-width
+    distribution.
+    """
+    normalized = (
+        column_name
+        .strip()
+        .casefold()
+    )
+
+    if normalized in {
+        "county",
+        "cause",
+        "metric",
+    }:
+        return 1.90
+
+    if normalized in {
+        "rank",
+        "county rank",
+    }:
+        return 0.55
+
+    if normalized == "fips":
+        return 0.65
+
+    if normalized == "year":
+        return 0.65
+
+    if normalized == "direction":
+        return 0.85
+
+    if normalized in {
+        "estimate",
+        "lower",
+        "upper",
+    }:
+        return 0.75
+
+    if normalized in {
+        "yll rate",
+        "2000 rate",
+        "2019 rate",
+    }:
+        return 0.80
+
+    if normalized in {
+        "national rank",
+        "percentile",
+        "signed gap",
+        "gap magnitude",
+        "relative gap",
+        "absolute change",
+        "percent change",
+    }:
+        return 0.90
+
+    # Dynamic disparity columns such as:
+    # "Non-Latino, Black Rate"
+    # "Non-Latino, White Rate"
+    if normalized.endswith(" rate"):
+        return 1.15
+
+    return 0.85
+
+
+def _table_requires_landscape(
+    dataframe: pd.DataFrame,
+) -> bool:
+    """
+    Determine whether a formatted evidence table should be
+    displayed in landscape orientation.
+
+    Wide analytical tables are moved to landscape even when they
+    could technically fit on a portrait page, because the wider
+    layout substantially improves readability.
+    """
+    if dataframe.empty:
+        return False
+
+    total_width = sum(
+        _column_width_inches(
+            str(column)
+        )
+        for column in dataframe.columns
+    )
+
+    # In practice, tables approaching six inches become crowded
+    # once Word cell padding and wrapping are considered.
+    return total_width > 5.8
+
+
+def _start_landscape_section(
+    document: Document,
+):
+    """
+    Start a new landscape section and return it.
+    """
+    section = document.add_section()
+
+    section.orientation = (
+        WD_ORIENT.LANDSCAPE
+    )
+
+    section.page_width, section.page_height = (
+        section.page_height,
+        section.page_width,
+    )
+
+    section.top_margin = Inches(0.65)
+    section.bottom_margin = Inches(0.65)
+    section.left_margin = Inches(0.60)
+    section.right_margin = Inches(0.60)
+
+    return section
+
+
+def _start_portrait_section(
+    document: Document,
+):
+    """
+    Start a new portrait section and return it.
+    """
+    section = document.add_section()
+
+    section.orientation = (
+        WD_ORIENT.PORTRAIT
+    )
+
+    if (
+        section.page_width
+        > section.page_height
+    ):
+        (
+            section.page_width,
+            section.page_height,
+        ) = (
+            section.page_height,
+            section.page_width,
+        )
+
+    section.top_margin = Inches(0.75)
+    section.bottom_margin = Inches(0.75)
+    section.left_margin = Inches(0.80)
+    section.right_margin = Inches(0.80)
+
+    return section
+
+
 def _add_dataframe_table(
     document: Document,
     dataframe: pd.DataFrame,
     *,
     maximum_rows: int = 20,
-) -> None:
+    manage_orientation: bool = True,
+) -> bool:
     """
-    Add a compact evidence table to the DOCX report.
+    Add a compact, publication-oriented evidence table
+    to the DOCX report.
+
+    Returns True when the formatted table qualifies for
+    landscape orientation.
     """
     if dataframe.empty:
         document.add_paragraph(
             "No records were returned."
         )
-        return
+
+        return False
+
+    use_landscape = (
+        _table_requires_landscape(
+            dataframe
+        )
+    )
+
+    if (
+        use_landscape
+        and manage_orientation
+    ):
+        _start_landscape_section(
+            document
+        )
 
     display = dataframe.head(
         maximum_rows
@@ -219,20 +403,58 @@ def _add_dataframe_table(
 
     table.style = "Table Grid"
 
-    header_cells = table.rows[0].cells
+    # Keep Word from continuously redistributing
+    # widths according to cell contents.
+    table.autofit = False
+
+    column_widths = [
+        Inches(
+            _column_width_inches(
+                str(column)
+            )
+        )
+        for column in display.columns
+    ]
+
+    # Set the underlying table column widths.
+    for index, width in enumerate(
+        column_widths
+    ):
+        table.columns[index].width = (
+            width
+        )
+
+    header_cells = (
+        table.rows[0].cells
+    )
 
     for index, column in enumerate(
         display.columns
     ):
-        header_cells[index].text = str(
-            column
+        header_cells[index].width = (
+            column_widths[index]
         )
 
-        for run in header_cells[
-            index
-        ].paragraphs[0].runs:
+        header_cells[index].text = (
+            str(column)
+        )
+
+        paragraph = (
+            header_cells[index]
+            .paragraphs[0]
+        )
+
+        paragraph.paragraph_format.space_before = (
+            Pt(0)
+        )
+
+        paragraph.paragraph_format.space_after = (
+            Pt(0)
+        )
+
+        for run in paragraph.runs:
             run.bold = True
-            run.font.size = Pt(8)
+            run.font.size = Pt(7.5)
 
     for row in display.itertuples(
         index=False,
@@ -243,22 +465,53 @@ def _add_dataframe_table(
         for index, value in enumerate(
             row
         ):
-            cells[index].text = (
-                _clean_cell_value(value)
+            cells[index].width = (
+                column_widths[index]
             )
 
-            for paragraph in cells[
-                index
-            ].paragraphs:
-                for run in paragraph.runs:
-                    run.font.size = Pt(8)
+            cells[index].text = (
+                _clean_cell_value(
+                    value
+                )
+            )
 
-    if len(dataframe) > maximum_rows:
-        document.add_paragraph(
+            for paragraph in (
+                cells[index].paragraphs
+            ):
+                paragraph.paragraph_format.space_before = (
+                    Pt(0)
+                )
+
+                paragraph.paragraph_format.space_after = (
+                    Pt(0)
+                )
+
+                for run in paragraph.runs:
+                    run.font.size = Pt(7.5)
+
+    if (
+        len(dataframe)
+        > maximum_rows
+    ):
+        note = document.add_paragraph(
             f"Table displays the first "
             f"{maximum_rows:,} of "
             f"{len(dataframe):,} records."
         )
+
+        for run in note.runs:
+            run.font.size = Pt(8)
+            run.italic = True
+
+    if (
+        use_landscape
+        and manage_orientation
+    ):
+        _start_portrait_section(
+            document
+        )
+
+    return use_landscape
 
 
 def build_docx_document(
@@ -393,20 +646,43 @@ def build_docx_document(
                 pd.DataFrame,
             )
         ):
-            formatted_table = format_evidence_table(
-                item.source_function,
-                item.data,
+            formatted_table = (
+                format_evidence_table(
+                    item.source_function,
+                    item.data,
+                    context=(
+                        report.evidence.context
+                    ),
+                )
             )
 
-            caption_text = table_caption(
-                item.source_function,
-                item.title,
+            caption_text = (
+                table_caption(
+                    item.source_function,
+                    item.title,
+                )
             )
 
-            caption = document.add_paragraph()
+            use_landscape = (
+                _table_requires_landscape(
+                    formatted_table
+                )
+            )
+
+            # Start the landscape section BEFORE the caption
+            # so the caption and table remain together.
+            if use_landscape:
+                _start_landscape_section(
+                    document
+                )
+
+            caption = (
+                document.add_paragraph()
+            )
 
             caption_run = caption.add_run(
-                f"Table {index}. {caption_text}"
+                f"Table {index}. "
+                f"{caption_text}"
             )
 
             caption_run.bold = True
@@ -415,8 +691,17 @@ def build_docx_document(
             _add_dataframe_table(
                 document,
                 formatted_table,
-                maximum_rows=evidence_row_limit,
+                maximum_rows=(
+                    evidence_row_limit
+                ),
+                manage_orientation=False,
             )
+
+            # Return subsequent report content to portrait.
+            if use_landscape:
+                _start_portrait_section(
+                    document
+                )
 
     document.add_heading(
         "Data Source and Interpretation Note",
@@ -456,7 +741,9 @@ def export_docx_bytes(
 
     buffer = BytesIO()
 
-    document.save(buffer)
+    document.save(
+        buffer
+    )
 
     buffer.seek(0)
 
@@ -473,7 +760,9 @@ def save_docx_report(
     """
     Save a structured research report as a DOCX file.
     """
-    path = Path(output_path)
+    path = Path(
+        output_path
+    )
 
     path.parent.mkdir(
         parents=True,
