@@ -198,6 +198,26 @@ def _format_bmi_summary(
     )
 
 
+def _format_year(
+    value: object,
+) -> str:
+    """
+    Format a calendar year without thousands separators.
+    """
+    if pd.isna(value):
+        return ""
+
+    try:
+        return str(
+            int(float(value))
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return str(value)
+    
+    
 def _format_top_causes(
     dataframe: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -395,9 +415,9 @@ def _format_cause_trend(
 
     formatted = pd.DataFrame(
         {
-            "Year": display[
-                "year"
-            ].map(_format_integer),
+           "Year": display[
+               "year"
+            ].map(_format_year),
             "YLL Rate": display[
                 "yll_rate"
             ].map(_format_decimal),

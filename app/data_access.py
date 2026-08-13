@@ -123,13 +123,70 @@ def get_top_causes(
     limit: int = 10,
 ) -> pd.DataFrame:
     """
-    Return the leading causes for one county and year.
+    Return the leading non-overlapping display-level causes
+    for one county and year.
+
+    Selected broad aggregate and nested subtype causes are
+    suppressed from the default top-cause presentation, while
+    explicit cause-specific analyses remain available elsewhere.
+
+    Display ranks are recalculated after filtering so the
+    presented ranking is sequential.
     """
     if limit < 1 or limit > 30:
-        raise ValueError("limit must be between 1 and 30")
+        raise ValueError(
+            "limit must be between 1 and 30"
+        )
 
     return run_query(
         """
+        WITH eligible AS (
+            SELECT
+                r.county_display_order,
+                r.cause_id,
+                r.cause_name,
+                r.yll_rate,
+                r.lower,
+                r.upper,
+                r.national_county_rank,
+                r.national_display_order,
+                r.counties_with_estimate,
+                r.burden_percentile
+
+            FROM analytics.vw_county_rankings_display AS r
+
+            INNER JOIN analytics.dim_cause AS c
+                ON r.cause_id = c.cause_id
+
+            WHERE r.fips = ?
+              AND r.year = ?
+              AND c.include_in_top_cause_ranking = TRUE
+        ),
+
+        ranked AS (
+            SELECT
+                county_display_order,
+
+                ROW_NUMBER() OVER (
+                    ORDER BY
+                        yll_rate DESC,
+                        cause_name,
+                        cause_id
+                ) AS county_cause_rank,
+
+                cause_id,
+                cause_name,
+                yll_rate,
+                lower,
+                upper,
+                national_county_rank,
+                national_display_order,
+                counties_with_estimate,
+                burden_percentile
+
+            FROM eligible
+        )
+
         SELECT
             county_display_order,
             county_cause_rank,
@@ -143,16 +200,17 @@ def get_top_causes(
             counties_with_estimate,
             burden_percentile
 
-        FROM analytics.vw_county_rankings_display
+        FROM ranked
 
-        WHERE fips = ?
-          AND year = ?
-
-        ORDER BY county_display_order
+        ORDER BY county_cause_rank
 
         LIMIT ?
         """,
-        [fips, year, limit],
+        [
+            fips,
+            year,
+            limit,
+        ],
     )
 
 

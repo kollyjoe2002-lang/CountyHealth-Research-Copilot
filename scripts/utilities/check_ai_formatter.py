@@ -5,21 +5,19 @@ from pathlib import Path
 
 import pandas as pd
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-
-from ai.classifier import classify_question  # noqa: E402
-from ai.executor import execute_plan  # noqa: E402
-from ai.formatter import (  # noqa: E402
-    format_evidence_table,
-    table_caption,
-)
-from ai.planner import build_analysis_plan  # noqa: E402
-from ai.resolver import resolve_plan  # noqa: E402
+# The AI submodules depend on the project root being on sys.path.
+# isort: off
+from ai.classifier import classify_question
+from ai.executor import execute_plan
+from ai.formatter import format_evidence_table, table_caption
+from ai.planner import build_analysis_plan
+from ai.resolver import resolve_plan
+# isort: on
 
 
 QUESTIONS = [
@@ -87,6 +85,7 @@ def main() -> None:
             formatted = format_evidence_table(
                 item.source_function,
                 item.data,
+                context=evidence.context,
             )
 
             caption = table_caption(

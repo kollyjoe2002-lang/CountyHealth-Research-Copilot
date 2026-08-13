@@ -40,8 +40,10 @@ SELECT DISTINCT
     CASE
         WHEN cause_name = 'All causes'
             THEN 'Overall burden category'
+
         WHEN cause_name = 'Non-communicable diseases'
             THEN 'Broad disease category'
+
         WHEN cause_name IN (
             'Cardiovascular diseases',
             'Neoplasms',
@@ -50,20 +52,77 @@ SELECT DISTINCT
             'Chronic respiratory diseases'
         )
             THEN 'Broad cause group'
+
         ELSE 'Cause available for default rankings'
-    END AS cause_type
+    END AS cause_type,
+
+    CASE
+        -- Broad aggregate categories should not appear
+        -- in a leading-cause presentation list.
+        WHEN cause_name IN (
+            'All causes',
+            'Non-communicable diseases',
+            'Cardiovascular diseases',
+            'Neoplasms',
+            'Digestive diseases',
+            'Neurological disorders',
+            'Chronic respiratory diseases'
+        )
+            THEN FALSE
+
+        -- Use Diabetes mellitus as the display-level
+        -- diabetes cause rather than showing overlapping
+        -- broader and subtype categories together.
+        WHEN cause_name IN (
+            'Diabetes and kidney diseases',
+            'Diabetes mellitus type 2'
+        )
+            THEN FALSE
+
+        -- Use Stroke as the display-level cerebrovascular
+        -- cause in the leading-cause list.
+        WHEN cause_name IN (
+            'Ischemic stroke',
+            'Intracerebral hemorrhage'
+        )
+            THEN FALSE
+
+        -- Use Leukemia rather than simultaneously displaying
+        -- leukemia and represented subtypes.
+        WHEN cause_name IN (
+            'Acute myeloid leukemia',
+            'Chronic lymphoid leukemia',
+            'Chronic myeloid leukemia',
+            'Other leukemia'
+        )
+            THEN FALSE
+
+        -- Use Non-Hodgkin lymphoma rather than simultaneously
+        -- displaying represented subtypes.
+        WHEN cause_name IN (
+            'Burkitt lymphoma',
+            'Other non-Hodgkin lymphoma'
+        )
+            THEN FALSE
+
+        ELSE TRUE
+    END AS include_in_top_cause_ranking
 
 FROM (
-    SELECT cause_id, cause_name
+    SELECT
+        cause_id,
+        cause_name
     FROM ihme.burden
 
     UNION
 
-    SELECT cause_id, cause_name
+    SELECT
+        cause_id,
+        cause_name
     FROM ihme.paf
 )
-ORDER BY cause_name;
 
+ORDER BY cause_name;
 
 -- =====================================================
 -- Sex Dimension

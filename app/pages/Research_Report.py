@@ -13,20 +13,23 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from ai.classifier import classify_question  # noqa: E402
-from ai.evidence import interpret_evidence  # noqa: E402
-from ai.executor import ExecutionError, execute_plan  # noqa: E402
-from ai.exporter import (  # noqa: E402
+from ai.classifier import classify_question
+from ai.executor import ExecutionError, execute_plan
+from ai.exporter import (
     default_report_filename,
     export_docx_bytes,
     export_markdown_bytes,
 )
-from ai.planner import build_analysis_plan  # noqa: E402
-from ai.report_writer import (  # noqa: E402
+from ai.planner import build_analysis_plan
+from ai.resolver import resolve_plan
+from ai.report_writer import (
     report_to_markdown,
     write_research_report,
 )
-from ai.resolver import resolve_plan  # noqa: E402
+from ai.figures import (
+    FigureGenerationError,
+    build_evidence_figure,
+)
 
 
 # ============================================================================
@@ -395,6 +398,41 @@ def display_downloads() -> None:
         )
 
 
+def display_research_figure() -> None:
+    """
+    Display the deterministic research figure generated
+    from the validated evidence bundle.
+    """
+    evidence = st.session_state.get(
+        "research_report_evidence"
+    )
+
+    if evidence is None:
+        return
+
+    st.markdown("### Research Figure")
+
+    try:
+        figure = build_evidence_figure(
+            evidence
+        )
+
+        st.pyplot(
+            figure,
+            clear_figure=True,
+            width="stretch",
+        )
+
+        st.caption(
+            "Figure generated directly from validated "
+            "CountyHealth Research Copilot analytical evidence."
+        )
+
+    except FigureGenerationError as exc:
+        st.info(
+            f"A research figure could not be generated: {exc}"
+        )
+
 # ============================================================================
 # PAGE
 # ============================================================================
@@ -540,6 +578,10 @@ report = st.session_state.get(
 
 if report is not None:
     display_report()
+
+    st.markdown("---")
+
+    display_research_figure()
 
     st.markdown("---")
 

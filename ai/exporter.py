@@ -17,6 +17,10 @@ from ai.formatter import (
     format_evidence_table,
     table_caption,
 )
+from ai.figures import (
+    FigureGenerationError,
+    export_evidence_figure_png,
+)
 from ai.models import ResearchReport
 from ai.report_writer import report_to_markdown
 
@@ -514,6 +518,114 @@ def _add_dataframe_table(
     return use_landscape
 
 
+def _figure_caption(
+    report: ResearchReport,
+) -> str:
+    """
+    Return a human-readable caption for the report's
+    deterministic research figure.
+    """
+    intent_value = report.evidence.intent.value
+
+    captions = {
+        "county_profile": (
+            "Leading High-BMI-Attributable Causes"
+        ),
+        "trend_comparison": (
+            "Annual High-BMI-Attributable YLL Rate"
+        ),
+        "county_ranking": (
+            "Highest County YLL Rates"
+        ),
+        "demographic_disparity": (
+            "Largest County Demographic Disparities"
+        ),
+    }
+
+    return captions.get(
+        intent_value,
+        "Validated Research Evidence",
+    )
+
+
+def _add_research_figure(
+    document: Document,
+    report: ResearchReport,
+) -> bool:
+    """
+    Generate and insert the primary deterministic research
+    figure into the DOCX report.
+
+    Returns True when a figure was successfully added.
+    """
+    try:
+        png_bytes = export_evidence_figure_png(
+            report.evidence,
+            dpi=180,
+        )
+    except FigureGenerationError as exc:
+        raise ReportExportError(
+            f"Research figure generation failed: {exc}"
+        ) from exc
+    except Exception as exc:
+        raise ReportExportError(
+            f"Unexpected research figure export failure: {exc}"
+        ) from exc
+
+    document.add_heading(
+        "Research Figure",
+        level=1,
+    )
+
+    picture_stream = BytesIO(
+        png_bytes
+    )
+
+    document.add_picture(
+        picture_stream,
+        width=Inches(6.5),
+    )
+
+    figure_paragraph = (
+        document.paragraphs[-1]
+    )
+
+    figure_paragraph.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    caption = document.add_paragraph()
+
+    caption.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    caption_run = caption.add_run(
+        "Figure 1. "
+        + _figure_caption(
+            report
+        )
+    )
+
+    caption_run.bold = True
+    caption_run.font.size = Pt(9)
+
+    source_note = document.add_paragraph(
+        "Figure generated directly from validated "
+        "CountyHealth Research Copilot analytical evidence."
+    )
+
+    source_note.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    for run in source_note.runs:
+        run.font.size = Pt(8)
+        run.italic = True
+
+    return True
+
+
 def build_docx_document(
     report: ResearchReport,
     *,
@@ -569,6 +681,13 @@ def build_docx_document(
     _add_bullets(
         document,
         report.findings,
+    )
+
+    # Add the primary deterministic research figure.
+    # The report remains valid even if figure generation fails.
+    _add_research_figure(
+        document,
+        report,
     )
 
     document.add_heading(
@@ -669,8 +788,8 @@ def build_docx_document(
                 )
             )
 
-            # Start the landscape section BEFORE the caption
-            # so the caption and table remain together.
+            # Start landscape BEFORE the caption so the
+            # caption and wide evidence table stay together.
             if use_landscape:
                 _start_landscape_section(
                     document
@@ -718,7 +837,6 @@ def build_docx_document(
     )
 
     return document
-
 
 def export_docx_bytes(
     report: ResearchReport,
