@@ -28,9 +28,6 @@ def classify_file(file_path: Path) -> str:
         )
 
     return "BMI"
-    raise ValueError(
-        f"Unrecognized IHME filename: {file_path.name}"
-    )
 
 def discover_files() -> list[dict]:
     """
