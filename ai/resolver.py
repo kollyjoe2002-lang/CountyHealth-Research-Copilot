@@ -147,6 +147,12 @@ def resolve_cause(
 ) -> dict[str, Any]:
     """
     Resolve a cause name and ID against the validated lookup.
+
+    Cause resolution is intentionally conservative:
+    - exact validated cause names are accepted;
+    - approved shorthand aliases are accepted;
+    - unknown causes are rejected rather than fuzzily mapped
+      to a different validated cause.
     """
     causes = (
         get_disparity_causes()
@@ -178,12 +184,36 @@ def resolve_cause(
         .tolist()
     )
 
-    matched_name, score = _best_text_match(
-        question_text,
-        cause_names,
+    normalized_question = _normalize_text(
+        question_text
     )
 
-    # Common researcher shorthand.
+    matched_name: str | None = None
+    score = 0.0
+
+    # Exact validated cause-name matching.
+    exact_matches = [
+        cause_name
+        for cause_name in cause_names
+        if _normalize_text(
+            cause_name
+        )
+        in normalized_question
+    ]
+
+    if exact_matches:
+        matched_name = max(
+            exact_matches,
+            key=lambda value: len(
+                _normalize_text(
+                    value
+                )
+            ),
+        )
+
+        score = 1.0
+
+    # Approved researcher shorthand.
     shorthand_map = {
         "diabetes": [
             "Diabetes mellitus type 2",
@@ -199,10 +229,6 @@ def resolve_cause(
             ),
         ],
     }
-
-    normalized_question = _normalize_text(
-        question_text
-    )
 
     for shorthand, preferred_names in (
         shorthand_map.items()
@@ -221,9 +247,15 @@ def resolve_cause(
                     score = 1.0
                     break
 
+            if matched_name is not None:
+                break
+
+    # Fail closed when no validated cause or approved
+    # shorthand can be resolved.
     if matched_name is None:
         raise ResolutionError(
-            "No cause could be resolved from the question."
+            "The requested disease or cause could not be "
+            "matched to a validated CountyHealth cause."
         )
 
     matched_rows = causes.loc[
@@ -242,8 +274,12 @@ def resolve_cause(
     row = matched_rows.iloc[0]
 
     return {
-        "cause_id": int(row["cause_id"]),
-        "cause_name": str(row["cause_name"]),
+        "cause_id": int(
+            row["cause_id"]
+        ),
+        "cause_name": str(
+            row["cause_name"]
+        ),
         "match_score": round(
             float(score),
             3,

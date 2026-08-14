@@ -22,8 +22,8 @@ INTENT_PATTERNS = {
     AnalysisIntent.TREND_COMPARISON: [
         r"\btrend",
         r"\bover time",
-        r"\bbetween 20\d{2} and 20\d{2}",
-        r"\bfrom 20\d{2} to 20\d{2}",
+        r"\bbetween (?:19|20)\d{2} and (?:19|20)\d{2}",
+        r"\bfrom (?:19|20)\d{2} to (?:19|20)\d{2}",
         r"\bchange over",
         r"\bcompare counties",
     ],
@@ -52,12 +52,21 @@ INTENT_PATTERNS = {
 }
 
 
-def _find_years(text: str) -> list[int]:
+def _find_years(
+    text: str,
+) -> list[int]:
+    """
+    Extract explicit four-digit years from a research question.
+
+    Years outside the supported analytical period are still
+    extracted so they can be rejected with a precise validation
+    message later.
+    """
     return sorted(
         {
             int(value)
             for value in re.findall(
-                r"\b(20\d{2})\b",
+                r"\b((?:19|20)\d{2})\b",
                 text,
             )
         }

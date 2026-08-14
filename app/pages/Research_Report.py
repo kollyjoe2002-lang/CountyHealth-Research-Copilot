@@ -30,6 +30,10 @@ from ai.figures import (
     FigureGenerationError,
     build_evidence_figure,
 )
+from ai.validation import (
+    QuestionValidationError,
+    validate_question,
+)
 
 
 # ============================================================================
@@ -93,7 +97,9 @@ def run_research_pipeline(
         classified = classify_question(
             question
         )
-
+        validate_question(
+            classified
+        ) 
         plan = build_analysis_plan(
             classified
         )
