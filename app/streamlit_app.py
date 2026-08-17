@@ -74,7 +74,7 @@ def main() -> None:
     st.divider()
 
     st.caption(
-        "Version 0.1 • Built with DuckDB, Streamlit and IHME county-level data."
+        "Version 1.0 • Built with DuckDB, Streamlit and IHME county-level data."
     )
 
 
