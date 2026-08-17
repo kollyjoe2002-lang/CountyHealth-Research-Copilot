@@ -352,7 +352,7 @@ def display_ranking_table(
 
     st.dataframe(
         display[available_columns],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "County": st.column_config.TextColumn(width="large"),
@@ -1021,7 +1021,7 @@ else:
 
     map_event = st.plotly_chart(
         figure,
-        use_container_width=True,
+        width="stretch",
         key="disparity_county_map",
         on_select="rerun",
         selection_mode="points",
@@ -1689,7 +1689,7 @@ st.download_button(
     data=dataframe_to_csv(download_data),
     file_name=download_filename,
     mime="text/csv",
-    use_container_width=False,
+    width="content",
 )
 
 
