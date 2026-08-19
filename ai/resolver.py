@@ -291,7 +291,14 @@ def resolve_county(
     question_text: str,
 ) -> dict[str, Any]:
     """
-    Resolve a current county and FIPS code.
+    Resolve a current county and FIPS code conservatively.
+
+    County resolution is intentionally fail-closed:
+    - validated county/location names are accepted;
+    - normal punctuation differences are accepted;
+    - phrasing such as "Albany County in Wyoming" is accepted;
+    - unknown or misspelled counties are rejected rather than
+      fuzzily mapped to a different validated county.
     """
     counties = get_counties()
 
@@ -312,49 +319,121 @@ def resolve_county(
             "The county lookup is missing required columns."
         )
 
-    county_names = (
-        counties["location_name"]
-        .dropna()
-        .astype(str)
-        .tolist()
+    normalized_question = _normalize_text(
+        question_text
     )
 
-    matched_name, score = _best_text_match(
-        question_text,
-        county_names,
-        minimum_score=0.62,
-    )
+    matched_rows: list[
+        tuple[pd.Series, str]
+    ] = []
 
-    if matched_name is None:
+    for _, row in counties.iterrows():
+        location_name = str(
+            row["location_name"]
+        ).strip()
+
+        normalized_location = (
+            _normalize_text(
+                location_name
+            )
+        )
+
+        aliases = {
+            normalized_location,
+        }
+
+        # CountyHealth location labels normally have the form:
+        # "Albany County (Wyoming)"
+        #
+        # Add a natural-language alias:
+        # "Albany County in Wyoming"
+        match = re.match(
+            r"^(.*?)\s*\(([^()]+)\)\s*$",
+            location_name,
+        )
+
+        if match is not None:
+            locality = _normalize_text(
+                match.group(1)
+            )
+
+            state = _normalize_text(
+                match.group(2)
+            )
+
+            aliases.update(
+                {
+                    f"{locality} {state}",
+                    f"{locality} in {state}",
+                }
+            )
+
+        matched_alias = next(
+            (
+                alias
+                for alias in aliases
+                if alias
+                and alias in normalized_question
+            ),
+            None,
+        )
+
+        if matched_alias is not None:
+            matched_rows.append(
+                (
+                    row,
+                    matched_alias,
+                )
+            )
+
+    if not matched_rows:
         raise ResolutionError(
             "No current county could be resolved "
             "from the question."
         )
 
-    matched_rows = counties.loc[
-        counties["location_name"]
-        .astype(str)
-        .str.casefold()
-        == matched_name.casefold()
+    # Prefer the longest validated match. This prevents a shorter
+    # geographical name from winning when a more specific validated
+    # name is also present.
+    longest_length = max(
+        len(alias)
+        for _, alias in matched_rows
+    )
+
+    best_matches = [
+        (
+            row,
+            alias,
+        )
+        for row, alias in matched_rows
+        if len(alias) == longest_length
     ]
 
-    if len(matched_rows) != 1:
-        raise ResolutionError(
-            f"County resolution was ambiguous for "
-            f"'{matched_name}'."
+    if len(best_matches) != 1:
+        names = sorted(
+            {
+                str(
+                    row["location_name"]
+                )
+                for row, _ in best_matches
+            }
         )
 
-    row = matched_rows.iloc[0]
+        raise ResolutionError(
+            "County resolution was ambiguous among "
+            f"validated locations: {names}."
+        )
+
+    row, _ = best_matches[0]
 
     return {
-        "fips": str(row["fips"]).zfill(5),
+        "fips": str(
+            row["fips"]
+        ).zfill(5),
         "location_name": str(
             row["location_name"]
         ),
-        "match_score": round(
-            float(score),
-            3,
-        ),
+        "match_score": 1.0,
     }
 
 
@@ -503,6 +582,11 @@ def resolve_plan(
     Populate resolvable plan parameters using validated lookups.
 
     The supplied plan is updated in place and returned.
+
+    Human-readable validated context is also stored in
+    plan.resolved_context so downstream evidence and narrative
+    interpretation can cite county, cause, year, and demographic
+    context explicitly.
     """
     question_text = (
         classified.question.raw_text
@@ -522,6 +606,8 @@ def resolve_plan(
                     classified
                 )
             )
+
+            analysis_year: int | None = None
 
             for step in plan.steps:
                 if (
@@ -553,6 +639,14 @@ def resolve_plan(
                         }
                     )
 
+                    if (
+                        step.parameters.get("year")
+                        is not None
+                    ):
+                        analysis_year = int(
+                            step.parameters["year"]
+                        )
+
             plan.assumptions.append(
                 "Resolved cause: "
                 f"{cause['cause_name']}."
@@ -563,17 +657,37 @@ def resolve_plan(
                 f"{groups['group_a_name']} versus "
                 f"{groups['group_b_name']}."
             )
+
             plan.resolved_context.update(
                 {
-                    "dimension": groups["dimension"],
-                    "group_a_id": groups["group_a_id"],
-                    "group_a_name": groups["group_a_name"],
-                    "group_b_id": groups["group_b_id"],
-                    "group_b_name": groups["group_b_name"],
-                    "cause_id": cause["cause_id"],
-                    "cause_name": cause["cause_name"],
+                    "dimension": groups[
+                        "dimension"
+                    ],
+                    "group_a_id": groups[
+                        "group_a_id"
+                    ],
+                    "group_a_name": groups[
+                        "group_a_name"
+                    ],
+                    "group_b_id": groups[
+                        "group_b_id"
+                    ],
+                    "group_b_name": groups[
+                        "group_b_name"
+                    ],
+                    "cause_id": cause[
+                        "cause_id"
+                    ],
+                    "cause_name": cause[
+                        "cause_name"
+                    ],
                 }
             )
+
+            if analysis_year is not None:
+                plan.resolved_context[
+                    "year"
+                ] = analysis_year
 
         elif plan.intent == (
             AnalysisIntent.COUNTY_PROFILE
@@ -582,10 +696,21 @@ def resolve_plan(
                 question_text
             )
 
+            analysis_year: int | None = None
+
             for step in plan.steps:
                 if "fips" in step.parameters:
                     step.parameters["fips"] = (
                         county["fips"]
+                    )
+
+                if (
+                    step.parameters.get("year")
+                    is not None
+                    and analysis_year is None
+                ):
+                    analysis_year = int(
+                        step.parameters["year"]
                     )
 
             plan.assumptions.append(
@@ -593,6 +718,22 @@ def resolve_plan(
                 f"{county['location_name']} "
                 f"({county['fips']})."
             )
+
+            plan.resolved_context.update(
+                {
+                    "fips": county[
+                        "fips"
+                    ],
+                    "location_name": county[
+                        "location_name"
+                    ],
+                }
+            )
+
+            if analysis_year is not None:
+                plan.resolved_context[
+                    "year"
+                ] = analysis_year
 
         elif plan.intent == (
             AnalysisIntent.TREND_COMPARISON
@@ -608,6 +749,9 @@ def resolve_plan(
                 question_text
             )
 
+            first_year: int | None = None
+            last_year: int | None = None
+
             for step in plan.steps:
                 if (
                     step.operation
@@ -622,10 +766,59 @@ def resolve_plan(
                             "fips"
                         ] = county["fips"]
 
+                elif (
+                    step.operation
+                    == "restrict_year_range"
+                ):
+                    if (
+                        step.parameters.get(
+                            "first_year"
+                        )
+                        is not None
+                    ):
+                        first_year = int(
+                            step.parameters[
+                                "first_year"
+                            ]
+                        )
+
+                    if (
+                        step.parameters.get(
+                            "last_year"
+                        )
+                        is not None
+                    ):
+                        last_year = int(
+                            step.parameters[
+                                "last_year"
+                            ]
+                        )
+
             plan.assumptions.append(
                 "Resolved cause: "
                 f"{cause['cause_name']}."
             )
+
+            plan.resolved_context.update(
+                {
+                    "cause_id": cause[
+                        "cause_id"
+                    ],
+                    "cause_name": cause[
+                        "cause_name"
+                    ],
+                }
+            )
+
+            if first_year is not None:
+                plan.resolved_context[
+                    "first_year"
+                ] = first_year
+
+            if last_year is not None:
+                plan.resolved_context[
+                    "last_year"
+                ] = last_year
 
             if county is None:
                 plan.unresolved_items.append(
@@ -639,6 +832,17 @@ def resolve_plan(
                     f"({county['fips']})."
                 )
 
+                plan.resolved_context.update(
+                    {
+                        "fips": county[
+                            "fips"
+                        ],
+                        "location_name": county[
+                            "location_name"
+                        ],
+                    }
+                )
+
         elif plan.intent == (
             AnalysisIntent.COUNTY_RANKING
         ):
@@ -646,16 +850,43 @@ def resolve_plan(
                 question_text
             )
 
+            analysis_year: int | None = None
+
             for step in plan.steps:
                 if "cause_id" in step.parameters:
                     step.parameters[
                         "cause_id"
                     ] = cause["cause_id"]
 
+                if (
+                    step.parameters.get("year")
+                    is not None
+                    and analysis_year is None
+                ):
+                    analysis_year = int(
+                        step.parameters["year"]
+                    )
+
             plan.assumptions.append(
                 "Resolved cause: "
                 f"{cause['cause_name']}."
             )
+
+            plan.resolved_context.update(
+                {
+                    "cause_id": cause[
+                        "cause_id"
+                    ],
+                    "cause_name": cause[
+                        "cause_name"
+                    ],
+                }
+            )
+
+            if analysis_year is not None:
+                plan.resolved_context[
+                    "year"
+                ] = analysis_year
 
     except ResolutionError as exc:
         plan.unresolved_items.append(

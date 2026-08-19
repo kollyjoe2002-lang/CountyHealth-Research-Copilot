@@ -7,6 +7,7 @@ import pandas as pd
 from ai.models import (
     AnalysisIntent,
     EvidenceBundle,
+    EvidenceClaim,
 )
 
 
@@ -733,3 +734,351 @@ def interpret_evidence(
         f"Interpretation is not implemented for "
         f"intent '{bundle.intent.value}'."
     )
+
+
+def build_evidence_claims(
+    bundle: EvidenceBundle,
+) -> list[EvidenceClaim]:
+    """
+    Build structured deterministic claims from validated evidence.
+
+    Existing deterministic interpretation remains the factual source.
+    Validated resolved context is promoted into an explicit context
+    claim so downstream narrative interpretation can cite county,
+    cause, year, and demographic context directly.
+
+    Semantic claim identifiers are assigned according to the meaning
+    of each deterministic finding rather than its list position.
+    """
+    findings = interpret_evidence(bundle)
+
+    context_claims: list[EvidenceClaim] = []
+
+    if bundle.intent == AnalysisIntent.COUNTY_PROFILE:
+        location_name = str(
+            bundle.context.get(
+                "location_name",
+                "the selected county",
+            )
+        )
+
+        year = bundle.context.get(
+            "year"
+        )
+
+        context_text = (
+            f"The county profile concerns {location_name}"
+        )
+
+        if year is not None:
+            context_text += (
+                f" using {year} profile indicators."
+            )
+        else:
+            context_text += "."
+
+        context_claims.append(
+            EvidenceClaim(
+                claim_id="profile.context",
+                text=context_text,
+                source_function="resolved_context",
+                metadata={
+                    "intent": bundle.intent.value,
+                    "fips": bundle.context.get(
+                        "fips"
+                    ),
+                    "location_name": location_name,
+                    "year": year,
+                },
+            )
+        )
+
+    elif bundle.intent == AnalysisIntent.TREND_COMPARISON:
+        location_name = str(
+            bundle.context.get(
+                "location_name",
+                "the selected county",
+            )
+        )
+
+        cause_name = str(
+            bundle.context.get(
+                "cause_name",
+                "the selected cause",
+            )
+        )
+
+        first_year = bundle.context.get(
+            "first_year"
+        )
+
+        last_year = bundle.context.get(
+            "last_year"
+        )
+
+        context_text = (
+            f"The trend analysis concerns {cause_name} "
+            f"in {location_name}"
+        )
+
+        if (
+            first_year is not None
+            and last_year is not None
+        ):
+            context_text += (
+                f" from {first_year} through {last_year}."
+            )
+        else:
+            context_text += "."
+
+        context_claims.append(
+            EvidenceClaim(
+                claim_id="trend.context",
+                text=context_text,
+                source_function="resolved_context",
+                metadata={
+                    "intent": bundle.intent.value,
+                    "cause_id": bundle.context.get(
+                        "cause_id"
+                    ),
+                    "cause_name": cause_name,
+                    "fips": bundle.context.get(
+                        "fips"
+                    ),
+                    "location_name": location_name,
+                    "first_year": first_year,
+                    "last_year": last_year,
+                },
+            )
+        )
+
+    elif bundle.intent == AnalysisIntent.COUNTY_RANKING:
+        cause_name = str(
+            bundle.context.get(
+                "cause_name",
+                "the selected cause",
+            )
+        )
+
+        year = bundle.context.get(
+            "year"
+        )
+
+        context_text = (
+            "The national county ranking concerns "
+            f"{cause_name}"
+        )
+
+        if year is not None:
+            context_text += (
+                f" in {year}."
+            )
+        else:
+            context_text += "."
+
+        context_claims.append(
+            EvidenceClaim(
+                claim_id="ranking.context",
+                text=context_text,
+                source_function="resolved_context",
+                metadata={
+                    "intent": bundle.intent.value,
+                    "cause_id": bundle.context.get(
+                        "cause_id"
+                    ),
+                    "cause_name": cause_name,
+                    "year": year,
+                },
+            )
+        )
+
+    elif bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
+        cause_name = str(
+            bundle.context.get(
+                "cause_name",
+                "the selected cause",
+            )
+        )
+
+        group_a_name = str(
+            bundle.context.get(
+                "group_a_name",
+                "Group A",
+            )
+        )
+
+        group_b_name = str(
+            bundle.context.get(
+                "group_b_name",
+                "Group B",
+            )
+        )
+
+        dimension = str(
+            bundle.context.get(
+                "dimension",
+                "demographic group",
+            )
+        )
+
+        year = bundle.context.get(
+            "year"
+        )
+
+        context_text = (
+            f"The disparity analysis compares {group_a_name} "
+            f"with {group_b_name} for {cause_name} "
+            f"by {dimension}, using county-level YLL rates"
+        )
+
+        if year is not None:
+            context_text += (
+                f" in {year}."
+            )
+        else:
+            context_text += "."
+
+        context_claims.append(
+            EvidenceClaim(
+                claim_id="disparity.context",
+                text=context_text,
+                source_function="resolved_context",
+                metadata={
+                    "intent": bundle.intent.value,
+                    "cause_id": bundle.context.get(
+                        "cause_id"
+                    ),
+                    "cause_name": cause_name,
+                    "dimension": dimension,
+                    "group_a_id": bundle.context.get(
+                        "group_a_id"
+                    ),
+                    "group_a_name": group_a_name,
+                    "group_b_id": bundle.context.get(
+                        "group_b_id"
+                    ),
+                    "group_b_name": group_b_name,
+                    "year": year,
+                    "measure": "YLL rate",
+                    "units": "YLL-rate units",
+                },
+            )
+        )
+
+    claims: list[EvidenceClaim] = list(
+        context_claims
+    )
+
+    for index, finding in enumerate(
+        findings,
+        start=1,
+    ):
+        lowered = finding.casefold()
+
+        claim_id: str
+
+        if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
+            if "complete estimates" in lowered:
+                claim_id = "disparity.counties_compared"
+
+            elif "median signed disparity gap" in lowered:
+                claim_id = "disparity.median_gap"
+
+            elif "had the higher estimated rate" in lowered:
+                claim_id = "disparity.direction_counts"
+
+            elif "equal estimated rates" in lowered:
+                claim_id = "disparity.equal_count"
+
+            elif "largest positive disparity" in lowered:
+                claim_id = "disparity.largest_positive_gap"
+
+            elif "largest reverse disparity" in lowered:
+                claim_id = "disparity.largest_reverse_gap"
+
+            else:
+                claim_id = (
+                    f"demographic_disparity.finding.{index}"
+                )
+
+        elif bundle.intent == AnalysisIntent.TREND_COMPARISON:
+            if "annual observations" in lowered:
+                claim_id = "trend.observation_count"
+
+            elif "absolute change" in lowered:
+                claim_id = "trend.absolute_change"
+
+            elif "relative change" in lowered:
+                claim_id = "trend.relative_change"
+
+            elif "highest observed rate" in lowered:
+                claim_id = "trend.maximum"
+
+            elif "lowest observed rate" in lowered:
+                claim_id = "trend.minimum"
+
+            else:
+                claim_id = (
+                    f"trend_comparison.finding.{index}"
+                )
+
+        elif bundle.intent == AnalysisIntent.COUNTY_RANKING:
+            if "ranking included" in lowered:
+                claim_id = "ranking.county_count"
+
+            elif "ranked first nationally" in lowered:
+                claim_id = "ranking.highest"
+
+            elif "ranked last nationally" in lowered:
+                claim_id = "ranking.lowest"
+
+            elif "national range" in lowered:
+                claim_id = "ranking.range"
+
+            else:
+                claim_id = (
+                    f"county_ranking.finding.{index}"
+                )
+
+        elif bundle.intent == AnalysisIntent.COUNTY_PROFILE:
+            if lowered.startswith("obesity prevalence"):
+                claim_id = "profile.obesity_prevalence"
+
+            elif lowered.startswith("mean bmi"):
+                claim_id = "profile.mean_bmi"
+
+            elif lowered.startswith("overweight prevalence"):
+                claim_id = "profile.overweight_prevalence"
+
+            elif "leading high-bmi-attributable cause" in lowered:
+                claim_id = "profile.leading_cause"
+
+            elif "largest long-term increase" in lowered:
+                claim_id = "profile.largest_increase"
+
+            elif "largest long-term decrease" in lowered:
+                claim_id = "profile.largest_decrease"
+
+            else:
+                claim_id = (
+                    f"county_profile.finding.{index}"
+                )
+
+        else:
+            claim_id = (
+                f"{bundle.intent.value}.finding.{index}"
+            )
+
+        claims.append(
+            EvidenceClaim(
+                claim_id=claim_id,
+                text=finding,
+                source_function="deterministic_interpretation",
+                metadata={
+                    "intent": bundle.intent.value,
+                    "finding_index": index,
+                },
+            )
+        )
+
+    return claims

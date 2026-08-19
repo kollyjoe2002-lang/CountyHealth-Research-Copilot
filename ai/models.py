@@ -83,3 +83,96 @@ class ResearchReport:
     findings: list[str]
     limitations: list[str]
     evidence: EvidenceBundle
+
+@dataclass(frozen=True)
+class EvidenceClaim:
+    """
+    A deterministic analytical claim derived from validated evidence.
+
+    EvidenceClaim objects are the trusted factual units that may be
+    supplied to downstream narrative interpretation.
+    """
+
+    claim_id: str
+    text: str
+    source_function: str
+    value: Any = None
+    units: str = ""
+    metadata: dict[str, Any] = field(
+        default_factory=dict
+    )
+
+
+class EntailmentLabel(str, Enum):
+    ENTAILED = "ENTAILED"
+    UNSUPPORTED = "UNSUPPORTED"
+    CONTRADICTED = "CONTRADICTED"
+
+
+@dataclass(frozen=True)
+class EntailmentJudgment:
+    """
+    Semantic judgment of whether generated language follows from
+    its cited deterministic evidence.
+    """
+
+    label: EntailmentLabel
+    rationale: str
+    
+    
+@dataclass
+class InterpretationInput:
+    """
+    Evidence-grounded input contract for narrative interpretation.
+
+    The interpretation layer must operate only on these validated
+    claims and must not independently execute analytics.
+    """
+
+    question: ResearchQuestion
+    intent: AnalysisIntent
+    claims: list[EvidenceClaim]
+    context: dict[str, Any] = field(
+        default_factory=dict
+    )
+    warnings: list[str] = field(
+        default_factory=list
+    )
+    limitations: list[str] = field(
+        default_factory=list
+    )
+
+
+@dataclass(frozen=True)
+class InterpretationStatement:
+    """
+    One narrative statement with explicit supporting evidence claims.
+    """
+
+    text: str
+    supporting_claim_ids: list[str]
+    
+    
+@dataclass(frozen=True)
+class GroundedAnswer:
+    """
+    Direct answer with explicit supporting evidence claims.
+    """
+
+    text: str
+    supporting_claim_ids: list[str]
+    
+    
+@dataclass
+class InterpretationResult:
+    """
+    Structured narrative interpretation of validated evidence.
+    """
+
+    direct_answer: GroundedAnswer
+    interpretation: list[InterpretationStatement]
+    limitations: list[str]
+    follow_up_questions: list[str]
+    warnings: list[str] = field(
+        default_factory=list
+    )

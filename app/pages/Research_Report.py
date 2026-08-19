@@ -34,7 +34,10 @@ from ai.validation import (
     QuestionValidationError,
     validate_question,
 )
-
+from ai.research_assistant import (
+    ResearchAssistantError,
+    interpret_evidence_bundle,
+)
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -58,6 +61,9 @@ def initialize_session_state() -> None:
         "research_report_plan": None,
         "research_report_evidence": None,
         "research_report_report": None,
+        "research_report_interpretation_input": None,
+        "research_report_interpretation": None,
+        "research_report_ai_error": None,
         "research_report_error": None,
     }
 
@@ -86,6 +92,18 @@ def clear_results() -> None:
     st.session_state[
         "research_report_error"
     ] = None
+    
+    st.session_state[
+    "research_report_interpretation_input"
+] = None
+
+st.session_state[
+    "research_report_interpretation"
+] = None
+
+st.session_state[
+    "research_report_ai_error"
+] = None
 
 
 def run_research_pipeline(
@@ -97,9 +115,11 @@ def run_research_pipeline(
         classified = classify_question(
             question
         )
+
         validate_question(
             classified
-        ) 
+        )
+
         plan = build_analysis_plan(
             classified
         )
@@ -127,6 +147,21 @@ def run_research_pipeline(
             evidence
         )
 
+        interpretation_input = None
+        interpretation = None
+        ai_error = None
+
+        try:
+            (
+                interpretation_input,
+                interpretation,
+            ) = interpret_evidence_bundle(
+                evidence
+            )
+
+        except ResearchAssistantError as exc:
+            ai_error = str(exc)
+
         st.session_state[
             "research_report_classified"
         ] = classified
@@ -143,11 +178,22 @@ def run_research_pipeline(
             "research_report_report"
         ] = report
 
+        st.session_state[
+            "research_report_interpretation_input"
+        ] = interpretation_input
+
+        st.session_state[
+            "research_report_interpretation"
+        ] = interpretation
+
+        st.session_state[
+            "research_report_ai_error"
+        ] = ai_error
+
     except Exception as exc:
         st.session_state[
             "research_report_error"
         ] = str(exc)
-
 
 def display_plan() -> None:
     plan = st.session_state.get(
@@ -344,6 +390,136 @@ def display_report() -> None:
     )
 
 
+def display_ai_interpretation() -> None:
+    interpretation = st.session_state.get(
+        "research_report_interpretation"
+    )
+
+    interpretation_input = st.session_state.get(
+        "research_report_interpretation_input"
+    )
+
+    ai_error = st.session_state.get(
+        "research_report_ai_error"
+    )
+
+    st.markdown("## AI Research Interpretation")
+
+    if interpretation is None:
+        if ai_error:
+            st.warning(
+                "The deterministic research report was generated "
+                "successfully, but the AI interpretation did not "
+                "pass the complete validation pipeline."
+            )
+
+            with st.expander(
+                "Technical details"
+            ):
+                st.write(
+                    ai_error
+                )
+        else:
+            st.info(
+                "No validated AI interpretation is available."
+            )
+
+        return
+
+    st.success(
+        "This interpretation passed structural grounding, "
+        "deterministic semantic validation, and model-based "
+        "semantic entailment checks."
+    )
+
+    st.markdown(
+        "### Direct Answer"
+    )
+
+    st.info(
+        interpretation.direct_answer.text
+    )
+
+    with st.expander(
+        "Direct-answer evidence"
+    ):
+        for claim_id in (
+            interpretation.direct_answer.supporting_claim_ids
+        ):
+            st.code(
+                claim_id
+            )
+
+            if interpretation_input is not None:
+                matching_claims = [
+                    claim
+                    for claim in interpretation_input.claims
+                    if claim.claim_id == claim_id
+                ]
+
+                for claim in matching_claims:
+                    st.write(
+                        claim.text
+                    )
+
+    if interpretation.interpretation:
+        st.markdown(
+            "### Interpretation"
+        )
+
+        for index, statement in enumerate(
+            interpretation.interpretation,
+            start=1,
+        ):
+            st.write(
+                f"**{index}. {statement.text}**"
+            )
+
+            with st.expander(
+                f"Evidence for statement {index}"
+            ):
+                for claim_id in (
+                    statement.supporting_claim_ids
+                ):
+                    st.code(
+                        claim_id
+                    )
+
+                    if interpretation_input is not None:
+                        matching_claims = [
+                            claim
+                            for claim in interpretation_input.claims
+                            if claim.claim_id == claim_id
+                        ]
+
+                        for claim in matching_claims:
+                            st.write(
+                                claim.text
+                            )
+
+    if interpretation.follow_up_questions:
+        st.markdown(
+            "### Suggested Follow-up Questions"
+        )
+
+        for follow_up in (
+            interpretation.follow_up_questions
+        ):
+            st.write(
+                f"- {follow_up}"
+            )
+
+    if interpretation.warnings:
+        st.markdown(
+            "### Interpretation Warnings"
+        )
+
+        for warning in interpretation.warnings:
+            st.warning(
+                warning
+            )
+            
+            
 def display_downloads() -> None:
     report = st.session_state.get(
         "research_report_report"
@@ -451,14 +627,17 @@ st.title(
 
 st.caption(
     "Ask a supported county-level public health question. "
-    "The system classifies the request, builds a transparent "
-    "analysis plan, resolves validated entities, executes approved "
-    "analytics, and generates an evidence-backed report."
+    "The system builds a transparent analytical plan, executes "
+    "validated analytics, generates a deterministic research report, "
+    "and may provide an AI interpretation that must pass multiple "
+    "evidence-grounding checks before display."
 )
 
-st.warning(
-    "This first version uses deterministic analytical rules. "
-    "It does not use a generative language model."
+st.info(
+    "EpiCounty uses validated deterministic analytics as the "
+    "factual foundation. AI-generated interpretation is displayed "
+    "only after passing structural grounding, deterministic semantic "
+    "validation, and model-based entailment checks."
 )
 
 st.markdown("## Ask a research question")
@@ -555,8 +734,8 @@ if generate_clicked:
         )
     else:
         with st.spinner(
-            "Classifying, planning, resolving, "
-            "executing, and generating the report..."
+            "Running validated analytics, generating the report, "
+            "and checking the AI interpretation..."
         ):
             run_research_pipeline(
                 cleaned_question
@@ -584,6 +763,10 @@ report = st.session_state.get(
 
 if report is not None:
     display_report()
+
+    st.markdown("---")
+
+    display_ai_interpretation()
 
     st.markdown("---")
 

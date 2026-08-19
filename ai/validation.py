@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from ai.models import (
     AnalysisIntent,
     ClassifiedQuestion,
@@ -17,6 +19,63 @@ class QuestionValidationError(
     Raised when a research question is outside the
     supported CountyHealth analytical scope.
     """
+
+
+def _validate_unsupported_inference(
+    classified: ClassifiedQuestion,
+) -> None:
+    """
+    Reject requests for inferential conclusions that are not
+    supported by the current V1 analytical engine.
+    """
+    text = (
+        classified.question.raw_text
+        .casefold()
+    )
+
+    unsupported_patterns = {
+        (
+            r"\bstatistically significant\b"
+        ): (
+            "statistical significance"
+        ),
+        (
+            r"\bsignificant difference\b"
+        ): (
+            "statistical significance"
+        ),
+        (
+            r"\bp[- ]?value\b"
+        ): (
+            "p-values"
+        ),
+        (
+            r"\bconfidence interval\b"
+        ): (
+            "confidence-interval inference"
+        ),
+        (
+            r"\bhypothesis test"
+        ): (
+            "hypothesis testing"
+        ),
+    }
+
+    for pattern, capability in (
+        unsupported_patterns.items()
+    ):
+        if re.search(
+            pattern,
+            text,
+        ):
+            raise QuestionValidationError(
+                "The current CountyHealth V1 analytical "
+                f"engine does not perform {capability}. "
+                "It can provide descriptive county-level "
+                "estimates and disparities, but formal "
+                "inferential testing must be performed "
+                "separately."
+            )
 
 
 def validate_question(
@@ -37,6 +96,10 @@ def validate_question(
             "trends, county rankings, and demographic "
             "disparity comparisons."
         )
+
+    _validate_unsupported_inference(
+        classified
+    )
 
     years = (
         classified.extracted_entities.get(

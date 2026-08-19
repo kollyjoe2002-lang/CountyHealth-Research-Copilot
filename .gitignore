@@ -40,3 +40,5 @@ outputs/
 build/
 dist/
 *.egg-info/
+
+.venv_release/
