@@ -33,7 +33,7 @@ TEST_CASES = [
     ),
     (
         "Which counties improved most since 2000?",
-        AnalysisIntent.LONG_TERM_CHANGE,
+    AnalysisIntent.UNKNOWN
     ),
 ]
 

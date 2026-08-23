@@ -176,11 +176,19 @@ def _interpret_disparity(
             "Group B",
         )
     )
-    
+
+    dimension = str(
+        bundle.context.get(
+            "dimension",
+            "demographic group",
+        )
+    ).strip()
+
     findings = [
         (
             f"{len(ranking):,} current counties had complete estimates "
-            "for both demographic groups."
+            f"for both selected groups ({group_a_name} and {group_b_name}) "
+            f"in the {dimension} comparison."
         ),
         (
             f"The median signed disparity gap was "
