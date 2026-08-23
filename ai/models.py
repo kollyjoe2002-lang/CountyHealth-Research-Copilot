@@ -38,6 +38,42 @@ class ClassifiedQuestion:
 
 
 @dataclass
+class SemanticAnalysisRequest:
+    """
+    Structured interpretation of a user's natural-language
+    research question.
+
+    This object describes what the user appears to be asking.
+    It does not contain analytical results and cannot execute
+    database operations.
+    """
+
+    question: ResearchQuestion
+    intent: AnalysisIntent
+    confidence: float
+
+    county_name: str | None = None
+    cause_name: str | None = None
+
+    year: int | None = None
+    start_year: int | None = None
+    end_year: int | None = None
+
+    demographic_dimension: str | None = None
+    demographic_groups: list[str] = field(
+        default_factory=list
+    )
+
+    direction: str | None = None
+    geographic_scope: str | None = None
+
+    needs_clarification: bool = False
+    clarification_question: str | None = None
+
+    explanation: str = ""
+    
+    
+@dataclass
 class AnalysisStep:
     step_number: int
     operation: str
