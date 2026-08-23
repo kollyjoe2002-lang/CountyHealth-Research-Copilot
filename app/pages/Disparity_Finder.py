@@ -95,6 +95,43 @@ def normalize_fips(value: Any) -> str | None:
     return digits.zfill(5)[-5:]
 
 
+# Geometry aliases are used only to connect validated analytical
+# geographies to equivalent polygons in the bundled county GeoJSON.
+#
+# These aliases represent renamed geographies whose boundaries are
+# equivalent for map-display purposes. Analytical FIPS values remain
+# unchanged everywhere else in EpiCounty.
+COUNTY_MAP_FIPS_ALIASES = {
+    # Kusilvak Census Area was formerly Wade Hampton Census Area.
+    "02158": "02270",
+
+    # Oglala Lakota County was formerly Shannon County.
+    "46102": "46113",
+}
+
+
+def get_map_fips(
+    analytical_fips: Any,
+) -> str | None:
+    """
+    Return the GeoJSON FIPS used to draw an analytical county.
+
+    The analytical FIPS itself is preserved unless a validated
+    rename-only geometry alias is required.
+    """
+    normalized = normalize_fips(
+        analytical_fips
+    )
+
+    if normalized is None:
+        return None
+
+    return COUNTY_MAP_FIPS_ALIASES.get(
+        normalized,
+        normalized,
+    )
+    
+
 def format_number(
     value: float | int | None,
     decimal_places: int = 2,
@@ -843,6 +880,11 @@ else:
         )
         .str.zfill(5)
     )
+    
+    map_data["map_fips"] = (
+    map_data["fips"]
+    .apply(get_map_fips)
+    )
 
     map_data = map_data.dropna(
         subset=[
@@ -916,13 +958,14 @@ else:
     choropleth_arguments = {
         "data_frame": map_data,
         "geojson": county_geojson,
-        "locations": "fips",
+        "locations": "map_fips",
         "featureidkey": "id",
         "color": map_column,
         "color_continuous_scale": color_scale,
         "hover_name": "location_name",
         "custom_data": ["fips"],
         "hover_data": {
+            "map_fips": False,
             "fips": True,
             "group_a_value": ":,.2f",
             "group_b_value": ":,.2f",
@@ -932,6 +975,7 @@ else:
         },
         "labels": {
             "fips": "FIPS",
+            "map_fips": "Map geometry FIPS",
             "group_a_value": f"{group_a_name} YLL rate",
             "group_b_value": f"{group_b_name} YLL rate",
             "absolute_gap": "Signed gap",
@@ -955,7 +999,7 @@ else:
         marker_line_color="white",
         hovertemplate=(
             "<b>%{hovertext}</b><br>"
-            "FIPS: %{location}<br>"
+            "FIPS: %{customdata[0]}<br>"
             f"{group_a_name}: "
             "%{customdata[1]:,.2f}<br>"
             f"{group_b_name}: "
@@ -1019,6 +1063,14 @@ else:
         map_explanation
     )
 
+    st.caption(
+        "Map coverage note: 3,112 of 3,124 analytical county-level "
+        "geographies have a matching or validated equivalent polygon in "
+        "the bundled GeoJSON boundary file. Twelve historical or retired "
+        "county-equivalent geographies remain available in analytical "
+        "tables and results but are not drawn on the map."
+    )
+    
     map_event = st.plotly_chart(
         figure,
         width="stretch",
