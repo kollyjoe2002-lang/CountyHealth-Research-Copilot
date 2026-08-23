@@ -7,6 +7,7 @@ from typing import Any
 
 class AnalysisIntent(str, Enum):
     COUNTY_PROFILE = "county_profile"
+    COUNTY_CAUSE_SNAPSHOT = "county_cause_snapshot"
     TREND_COMPARISON = "trend_comparison"
     DEMOGRAPHIC_DISPARITY = "demographic_disparity"
     COUNTY_RANKING = "county_ranking"

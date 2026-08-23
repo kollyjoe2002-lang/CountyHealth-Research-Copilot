@@ -16,6 +16,7 @@ from ai.models import (
 from app.data_access import (
     get_bmi_summary,
     get_cause_trend,
+    get_county_cause_record,
     get_county_disparity_ranking,
     get_county_ranking,
     get_long_term_change,
@@ -30,6 +31,7 @@ class ExecutionError(RuntimeError):
 APPROVED_FUNCTIONS: dict[str, Callable[..., pd.DataFrame]] = {
     "get_bmi_summary": get_bmi_summary,
     "get_top_causes": get_top_causes,
+    "get_county_cause_record": get_county_cause_record,
     "get_long_term_change": get_long_term_change,
     "get_cause_trend": get_cause_trend,
     "get_county_disparity_ranking": get_county_disparity_ranking,
@@ -126,6 +128,7 @@ def _evidence_title(
         "bmi_summary": "County BMI summary",
         "top_causes": "Leading attributable causes",
         "long_term_change": "Long-term cause change",
+        "county_cause_snapshot": "County disease-burden snapshot",
         "cause_trend": "Cause trend",
         "county_disparity_ranking": (
             "County demographic disparity ranking"
