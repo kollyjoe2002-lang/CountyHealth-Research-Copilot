@@ -531,17 +531,65 @@ def resolve_demographic_groups(
 
     resolved: list[dict[str, Any]] = []
 
+    demographic_aliases = {
+        "Race / ethnicity": {
+            "black": "Non-Latino, Black",
+            "black people": "Non-Latino, Black",
+            "african american": "Non-Latino, Black",
+            "african americans": "Non-Latino, Black",
+            "white": "Non-Latino, White",
+            "white people": "Non-Latino, White",
+            "whites": "Non-Latino, White",
+            "latino": "Latino, Any race",
+            "latinos": "Latino, Any race",
+            "hispanic": "Latino, Any race",
+            "hispanics": "Latino, Any race",
+        },
+        "Sex": {
+            "man": "Male",
+            "men": "Male",
+            "male": "Male",
+            "males": "Male",
+            "woman": "Female",
+            "women": "Female",
+            "female": "Female",
+            "females": "Female",
+        },
+    }
+
+    dimension_aliases = (
+        demographic_aliases.get(
+            str(dimension),
+            {},
+        )
+    )
+    
     for requested_name in requested_groups[:2]:
+        normalized_requested = (
+            requested_name
+            .strip()
+            .casefold()
+        )
+
+        canonical_requested = (
+            dimension_aliases.get(
+                normalized_requested,
+                requested_name,
+            )
+        )
+
         match = groups.loc[
             groups["group_name"]
             .astype(str)
             .str.casefold()
-            == requested_name.casefold()
+            == str(
+                canonical_requested
+            ).casefold()
         ]
 
         if len(match) != 1:
             raise ResolutionError(
-                f"Could not uniquely resolve demographic "
+                "Could not uniquely resolve demographic "
                 f"group '{requested_name}'."
             )
 
@@ -592,12 +640,28 @@ def resolve_plan(
         classified.question.raw_text
     )
 
+    entities = classified.extracted_entities
+
+    county_resolution_text = str(
+        entities.get(
+            "semantic_county_name",
+            question_text,
+        )
+    )
+
+    cause_resolution_text = str(
+        entities.get(
+            "semantic_cause_name",
+            question_text,
+        )
+    )
+
     try:
         if plan.intent == (
             AnalysisIntent.DEMOGRAPHIC_DISPARITY
         ):
             cause = resolve_cause(
-                question_text,
+                cause_resolution_text,
                 disparity=True,
             )
 
@@ -693,7 +757,7 @@ def resolve_plan(
             AnalysisIntent.COUNTY_PROFILE
         ):
             county = resolve_county(
-                question_text
+                county_resolution_text
             )
 
             analysis_year: int | None = None
@@ -739,11 +803,11 @@ def resolve_plan(
             AnalysisIntent.COUNTY_CAUSE_SNAPSHOT
         ):
             county = resolve_county(
-                question_text
+                county_resolution_text
             )
 
             cause = resolve_cause(
-                question_text
+                cause_resolution_text
             )
 
             analysis_year: int | None = None
@@ -802,13 +866,13 @@ def resolve_plan(
         ):
             try:
                 county = resolve_county(
-                    question_text
+                    county_resolution_text
                 )
             except ResolutionError:
                 county = None
 
             cause = resolve_cause(
-                question_text
+                cause_resolution_text
             )
 
             first_year: int | None = None
@@ -909,7 +973,7 @@ def resolve_plan(
             AnalysisIntent.COUNTY_RANKING
         ):
             cause = resolve_cause(
-                question_text
+                cause_resolution_text
             )
 
             analysis_year: int | None = None

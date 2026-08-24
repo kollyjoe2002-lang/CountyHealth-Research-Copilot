@@ -712,6 +712,128 @@ def _interpret_county_profile(
     return findings
 
 
+def _interpret_county_cause_snapshot(
+    bundle: EvidenceBundle,
+) -> list[str]:
+    """
+    Interpret one validated county-year-cause burden observation.
+    """
+    snapshot = _find_item(
+        bundle,
+        "get_county_cause_record",
+    )
+
+    if snapshot.empty:
+        return [
+            "No county disease-burden estimate was available "
+            "for the selected county, cause, and year."
+        ]
+
+    _require_columns(
+        snapshot,
+        {
+            "location_name",
+            "year",
+            "cause_name",
+            "yll_rate",
+            "lower",
+            "upper",
+            "national_county_rank",
+            "counties_with_estimate",
+            "burden_percentile",
+        },
+        evidence_name="County disease-burden snapshot",
+    )
+
+    if len(snapshot) != 1:
+        raise EvidenceInterpretationError(
+            "County disease-burden snapshot must contain "
+            "exactly one observation."
+        )
+
+    row = snapshot.iloc[0]
+
+    location_name = str(
+        row["location_name"]
+    )
+
+    cause_name = str(
+        row["cause_name"]
+    )
+
+    year = int(
+        row["year"]
+    )
+
+    yll_rate = _safe_float(
+        row["yll_rate"]
+    )
+
+    lower = _safe_float(
+        row["lower"]
+    )
+
+    upper = _safe_float(
+        row["upper"]
+    )
+
+    national_rank = _safe_float(
+        row["national_county_rank"]
+    )
+
+    counties_with_estimate = _safe_float(
+        row["counties_with_estimate"]
+    )
+
+    burden_percentile = _safe_float(
+        row["burden_percentile"]
+    )
+
+    findings: list[str] = []
+
+    if yll_rate is not None:
+        findings.append(
+            f"The estimated {cause_name} YLL rate in "
+            f"{location_name} in {year} was "
+            f"{_format_number(yll_rate)}."
+        )
+
+    if (
+        lower is not None
+        and upper is not None
+    ):
+        findings.append(
+            f"The reported uncertainty interval ranged from "
+            f"{_format_number(lower)} to "
+            f"{_format_number(upper)}."
+        )
+
+    if (
+        national_rank is not None
+        and counties_with_estimate is not None
+    ):
+        findings.append(
+            f"{location_name} ranked "
+            f"{int(national_rank):,} of "
+            f"{int(counties_with_estimate):,} counties "
+            f"nationally for {cause_name} burden."
+        )
+
+    if burden_percentile is not None:
+        findings.append(
+            f"The county's burden percentile was "
+            f"{_format_number(burden_percentile, 1)}."
+        )
+
+    if not findings:
+        findings.append(
+            "No interpretable county disease-burden "
+            "estimate was available."
+        )
+
+    return findings
+
+
 def interpret_evidence(
     bundle: EvidenceBundle,
 ) -> list[str]:
@@ -722,7 +844,10 @@ def interpret_evidence(
         return _interpret_disparity(
             bundle
         )
-
+    if bundle.intent == AnalysisIntent.COUNTY_CAUSE_SNAPSHOT:
+        return _interpret_county_cause_snapshot(
+            bundle
+        )
     if bundle.intent == AnalysisIntent.TREND_COMPARISON:
         return _interpret_trend(
             bundle
@@ -762,7 +887,60 @@ def build_evidence_claims(
 
     context_claims: list[EvidenceClaim] = []
 
-    if bundle.intent == AnalysisIntent.COUNTY_PROFILE:
+    if bundle.intent == AnalysisIntent.COUNTY_CAUSE_SNAPSHOT:
+        location_name = str(
+            bundle.context.get(
+                "location_name",
+                "the selected county",
+            )
+        )
+
+        cause_name = str(
+            bundle.context.get(
+                "cause_name",
+                "the selected cause",
+            )
+        )
+
+        year = bundle.context.get(
+            "year"
+        )
+
+        context_text = (
+            f"The county disease-burden snapshot concerns "
+            f"{cause_name} in {location_name}"
+        )
+
+        if year is not None:
+            context_text += (
+                f" in {year}."
+            )
+        else:
+            context_text += "."
+
+        context_claims.append(
+            EvidenceClaim(
+                claim_id="snapshot.context",
+                text=context_text,
+                source_function="resolved_context",
+                metadata={
+                    "intent": bundle.intent.value,
+                    "fips": bundle.context.get(
+                        "fips"
+                    ),
+                    "location_name": location_name,
+                    "cause_id": bundle.context.get(
+                        "cause_id"
+                    ),
+                    "cause_name": cause_name,
+                    "year": year,
+                    "measure": "YLL rate",
+                    "units": "YLL-rate units",
+                },
+            )
+        )
+
+    elif bundle.intent == AnalysisIntent.COUNTY_PROFILE:
         location_name = str(
             bundle.context.get(
                 "location_name",
@@ -1046,6 +1224,30 @@ def build_evidence_claims(
             else:
                 claim_id = (
                     f"county_ranking.finding.{index}"
+                )
+
+        elif bundle.intent == AnalysisIntent.COUNTY_CAUSE_SNAPSHOT:
+            if (
+                "yll rate" in lowered
+                and "estimated" in lowered
+            ):
+                claim_id = "snapshot.yll_rate"
+
+            elif "uncertainty interval" in lowered:
+                claim_id = "snapshot.uncertainty_interval"
+
+            elif (
+                "ranked" in lowered
+                and "nationally" in lowered
+            ):
+                claim_id = "snapshot.national_rank"
+
+            elif "burden percentile" in lowered:
+                claim_id = "snapshot.burden_percentile"
+
+            else:
+                claim_id = (
+                    f"county_cause_snapshot.finding.{index}"
                 )
 
         elif bundle.intent == AnalysisIntent.COUNTY_PROFILE:

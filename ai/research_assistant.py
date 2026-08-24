@@ -14,16 +14,24 @@ from ai.models import (
     EvidenceBundle,
     InterpretationInput,
     InterpretationResult,
+    ResearchQuestion,
 )
 from ai.openai_interpretation_provider import (
     OpenAIInterpretationProvider,
 )
+from ai.openai_semantic_parser import (
+    OpenAISemanticParser,
+    SemanticParserError,
+)
 from ai.planner import build_analysis_plan
 from ai.resolver import resolve_plan
-from ai.validation import validate_question
+from ai.semantic_adapter import (
+    semantic_request_to_classified,
+)
 from ai.semantic_entailment import (
     validate_semantic_entailment,
 )
+from ai.validation import validate_question
 
 
 class ResearchAssistantError(RuntimeError):
@@ -114,10 +122,18 @@ def answer_research_question(
     *,
     provider: OpenAIInterpretationProvider | None = None,
     judge: OpenAIEntailmentJudge | None = None,
+    semantic_parser: OpenAISemanticParser | None = None,
 ) -> tuple[InterpretationInput, InterpretationResult]:
     """
     Run the complete validated EpiCounty research-assistant pipeline
-    from research question through approved narrative interpretation.
+    from natural-language question through approved narrative
+    interpretation.
+
+    Semantic routing is attempted first.
+
+    The deterministic classifier is used only as a fallback when the
+    semantic parser fails technically. A successful semantic result
+    with intent UNKNOWN remains UNKNOWN and is not overridden.
     """
     cleaned = question_text.strip()
 
@@ -127,9 +143,40 @@ def answer_research_question(
         )
 
     try:
-        classified = classify_question(
-            cleaned
-        )
+        try:
+            active_semantic_parser = (
+                semantic_parser
+                if semantic_parser is not None
+                else OpenAISemanticParser()
+            )
+
+            semantic_request = (
+                active_semantic_parser.parse(
+                    ResearchQuestion(
+                        raw_text=cleaned
+                    )
+                )
+            )
+
+            classified = (
+                semantic_request_to_classified(
+                    semantic_request
+                )
+            )
+
+        except SemanticParserError:
+            # Technical semantic-parser failure only.
+            #
+            # Fall back to deterministic routing so the
+            # research assistant can retain basic analytical
+            # capability if semantic parsing is temporarily
+            # unavailable.
+            #
+            # A successful semantic result of UNKNOWN is not
+            # overridden by this fallback.
+            classified = classify_question(
+                cleaned
+            )
 
         validate_question(
             classified
