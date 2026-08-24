@@ -91,10 +91,10 @@ def validate_question(
     ):
         raise QuestionValidationError(
             "This question does not map to a supported "
-            "CountyHealth analysis. Supported analyses "
-            "include county profiles, disease-burden "
-            "trends, county rankings, and demographic "
-            "disparity comparisons."
+            "EpiCounty analysis. Supported analyses include "
+            "county profiles, county disease-burden snapshots, "
+            "disease-burden trends, county rankings, and "
+            "demographic disparity comparisons."
         )
 
     _validate_unsupported_inference(
@@ -129,9 +129,7 @@ def validate_question(
         )
 
         raise QuestionValidationError(
-            "The requested year or years "
-            f"({requested}) fall outside the "
-            "available CountyHealth analytical period "
-            f"of {SUPPORTED_FIRST_YEAR}–"
-            f"{SUPPORTED_LAST_YEAR}."
+            "Requested years are outside the supported range "
+            f"of {SUPPORTED_FIRST_YEAR}-{SUPPORTED_LAST_YEAR}: "
+            f"{requested}."
         )
