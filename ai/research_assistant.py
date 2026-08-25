@@ -1,38 +1,24 @@
 from __future__ import annotations
 
-from ai.classifier import classify_question
-from ai.entailment_judge import (
-    OpenAIEntailmentJudge,
-    validate_model_entailment,
-)
+from ai.entailment_judge import OpenAIEntailmentJudge, validate_model_entailment
 from ai.executor import execute_plan
 from ai.interpreter import build_interpretation_input
-from ai.interpretation_validator import (
-    validate_interpretation_result,
-)
+from ai.interpretation_validator import validate_interpretation_result
 from ai.models import (
     EvidenceBundle,
     InterpretationInput,
     InterpretationResult,
+    RequestPolicyDecision,
     ResearchQuestion,
 )
-from ai.openai_interpretation_provider import (
-    OpenAIInterpretationProvider,
-)
-from ai.openai_semantic_parser import (
-    OpenAISemanticParser,
-    SemanticParserError,
-)
+from ai.openai_interpretation_provider import OpenAIInterpretationProvider
+from ai.openai_semantic_parser import OpenAISemanticParser
 from ai.planner import build_analysis_plan
+from ai.request_policy import apply_request_policy
 from ai.resolver import resolve_plan
-from ai.semantic_adapter import (
-    semantic_request_to_classified,
-)
-from ai.semantic_entailment import (
-    validate_semantic_entailment,
-)
+from ai.semantic_adapter import semantic_request_to_classified
+from ai.semantic_entailment import validate_semantic_entailment
 from ai.validation import validate_question
-
 
 class ResearchAssistantError(RuntimeError):
     """
@@ -129,11 +115,15 @@ def answer_research_question(
     from natural-language question through approved narrative
     interpretation.
 
-    Semantic routing is attempted first.
-
-    The deterministic classifier is used only as a fallback when the
-    semantic parser fails technically. A successful semantic result
-    with intent UNKNOWN remains UNKNOWN and is not overridden.
+    Pipeline:
+    1. semantic parsing;
+    2. deterministic request policy;
+    3. semantic adaptation;
+    4. question validation;
+    5. deterministic planning and entity resolution;
+    6. deterministic analytical execution;
+    7. evidence-grounded narrative interpretation;
+    8. structural and semantic entailment validation.
     """
     cleaned = question_text.strip()
 
@@ -143,40 +133,51 @@ def answer_research_question(
         )
 
     try:
-        try:
-            active_semantic_parser = (
-                semantic_parser
-                if semantic_parser is not None
-                else OpenAISemanticParser()
-            )
+        active_semantic_parser = (
+            semantic_parser
+            if semantic_parser is not None
+            else OpenAISemanticParser()
+        )
 
-            semantic_request = (
-                active_semantic_parser.parse(
-                    ResearchQuestion(
-                        raw_text=cleaned
-                    )
+        semantic_request = active_semantic_parser.parse(
+            ResearchQuestion(
+                raw_text=cleaned
+            )
+        )
+
+        policy_result = apply_request_policy(
+            semantic_request
+        )
+
+        if (
+            policy_result.decision
+            is RequestPolicyDecision.CLARIFY
+        ):
+            clarification = (
+                policy_result.clarification_question
+                or (
+                    "Please provide the additional information "
+                    "needed to complete this analysis."
                 )
             )
 
-            classified = (
-                semantic_request_to_classified(
-                    semantic_request
-                )
+            raise ResearchAssistantError(
+                "The research question requires clarification: "
+                f"{clarification}"
             )
 
-        except SemanticParserError:
-            # Technical semantic-parser failure only.
-            #
-            # Fall back to deterministic routing so the
-            # research assistant can retain basic analytical
-            # capability if semantic parsing is temporarily
-            # unavailable.
-            #
-            # A successful semantic result of UNKNOWN is not
-            # overridden by this fallback.
-            classified = classify_question(
-                cleaned
+        if (
+            policy_result.decision
+            is RequestPolicyDecision.REJECT
+        ):
+            raise ResearchAssistantError(
+                "The research question cannot be executed: "
+                f"{policy_result.reason}"
             )
+
+        classified = semantic_request_to_classified(
+            policy_result.request
+        )
 
         validate_question(
             classified
@@ -190,6 +191,13 @@ def answer_research_question(
             classified,
             plan,
         )
+
+        if policy_result.assumptions:
+            resolved_plan.assumptions.extend(
+                assumption
+                for assumption in policy_result.assumptions
+                if assumption not in resolved_plan.assumptions
+            )
 
         if resolved_plan.unresolved_items:
             raise ResearchAssistantError(

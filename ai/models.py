@@ -73,6 +73,39 @@ class SemanticAnalysisRequest:
     explanation: str = ""
     
     
+class RequestPolicyDecision(str, Enum):
+    """
+    Deterministic disposition of a parsed semantic request.
+    """
+
+    EXECUTE = "execute"
+    CLARIFY = "clarify"
+    REJECT = "reject"
+
+
+@dataclass
+class RequestPolicyResult:
+    """
+    Result of applying deterministic execution policy to a
+    SemanticAnalysisRequest.
+
+    The policy layer does not perform analytics. It determines
+    whether the parsed request may proceed, requires clarification,
+    or must be rejected because the requested capability is outside
+    the supported analytical system.
+    """
+
+    request: SemanticAnalysisRequest
+    decision: RequestPolicyDecision
+    reason: str
+
+    clarification_question: str | None = None
+
+    assumptions: list[str] = field(
+        default_factory=list
+    )
+    
+    
 @dataclass
 class AnalysisStep:
     step_number: int
