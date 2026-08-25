@@ -246,3 +246,49 @@ class InterpretationResult:
     warnings: list[str] = field(
         default_factory=list
     )
+
+
+@dataclass
+class ResearchAssistantOutcome:
+    """
+    Complete result of the validated research-assistant orchestration.
+
+    This object preserves the intermediate deterministic artifacts required
+    by user interfaces, regression tests, exports, and audit inspection.
+
+    Exactly one of the following high-level states is expected:
+
+    - "answer":
+        The request was executed successfully and validated analytical
+        evidence was produced.
+
+    - "clarify":
+        The request is potentially supported but requires additional
+        information before safe deterministic execution.
+
+    - "reject":
+        The requested analytical operation is outside the currently
+        supported validated analytical engine.
+    """
+
+    status: str
+
+    semantic_request: SemanticAnalysisRequest
+
+    policy_result: RequestPolicyResult
+
+    classified_question: ClassifiedQuestion | None = None
+
+    resolved_plan: AnalysisPlan | None = None
+
+    evidence_bundle: EvidenceBundle | None = None
+
+    interpretation_input: InterpretationInput | None = None
+
+    interpretation_result: InterpretationResult | None = None
+
+    clarification_question: str | None = None
+
+    rejection_reason: str | None = None
+
+    ai_error: str | None = None
