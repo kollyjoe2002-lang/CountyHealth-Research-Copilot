@@ -293,12 +293,15 @@ def resolve_county(
     """
     Resolve a current county and FIPS code conservatively.
 
-    County resolution is intentionally fail-closed:
+    Resolution rules:
     - validated county/location names are accepted;
     - normal punctuation differences are accepted;
     - phrasing such as "Albany County in Wyoming" is accepted;
+    - a county name without a state is accepted only when that
+      county name uniquely identifies one current county;
+    - ambiguous county-only names require the state;
     - unknown or misspelled counties are rejected rather than
-      fuzzily mapped to a different validated county.
+      fuzzily mapped to another validated county.
     """
     counties = get_counties()
 
@@ -327,15 +330,18 @@ def resolve_county(
         tuple[pd.Series, str]
     ] = []
 
+    county_name_candidates: dict[
+        str,
+        list[pd.Series],
+    ] = {}
+
     for _, row in counties.iterrows():
         location_name = str(
             row["location_name"]
         ).strip()
 
-        normalized_location = (
-            _normalize_text(
-                location_name
-            )
+        normalized_location = _normalize_text(
+            location_name
         )
 
         aliases = {
@@ -343,9 +349,12 @@ def resolve_county(
         }
 
         # CountyHealth location labels normally have the form:
+        #
         # "Albany County (Wyoming)"
         #
-        # Add a natural-language alias:
+        # Add state-qualified natural-language aliases:
+        #
+        # "Albany County Wyoming"
         # "Albany County in Wyoming"
         match = re.match(
             r"^(.*?)\s*\(([^()]+)\)\s*$",
@@ -368,6 +377,13 @@ def resolve_county(
                 }
             )
 
+            county_name_candidates.setdefault(
+                locality,
+                [],
+            ).append(
+                row
+            )
+
         matched_alias = next(
             (
                 alias
@@ -386,55 +402,153 @@ def resolve_county(
                 )
             )
 
-    if not matched_rows:
-        raise ResolutionError(
-            "No current county could be resolved "
-            "from the question."
+    # ------------------------------------------------------------
+    # First preference:
+    # a fully qualified validated county/location match.
+    # ------------------------------------------------------------
+
+    if matched_rows:
+        longest_length = max(
+            len(alias)
+            for _, alias in matched_rows
         )
 
-    # Prefer the longest validated match. This prevents a shorter
-    # geographical name from winning when a more specific validated
-    # name is also present.
-    longest_length = max(
-        len(alias)
-        for _, alias in matched_rows
-    )
+        best_matches = [
+            (
+                row,
+                alias,
+            )
+            for row, alias in matched_rows
+            if len(alias) == longest_length
+        ]
 
-    best_matches = [
-        (
-            row,
-            alias,
-        )
-        for row, alias in matched_rows
-        if len(alias) == longest_length
-    ]
+        if len(best_matches) != 1:
+            names = sorted(
+                {
+                    str(
+                        row["location_name"]
+                    )
+                    for row, _ in best_matches
+                }
+            )
 
-    if len(best_matches) != 1:
-        names = sorted(
-            {
-                str(
-                    row["location_name"]
+            raise ResolutionError(
+                "County resolution was ambiguous among "
+                "validated locations: "
+                + "; ".join(names)
+                + ". Please specify the state."
+            )
+
+        row, _ = best_matches[0]
+
+        return {
+            "fips": str(
+                row["fips"]
+            ).zfill(5),
+            "location_name": str(
+                row["location_name"]
+            ),
+            "match_score": 1.0,
+        }
+
+    # ------------------------------------------------------------
+    # Second preference:
+    # county name without a state.
+    #
+    # This is allowed only when the normalized county name maps
+    # to exactly one current county.
+    # ------------------------------------------------------------
+
+    county_only_matches: list[
+        tuple[str, list[pd.Series]]
+    ] = []
+
+    for (
+        locality,
+        candidate_rows,
+    ) in county_name_candidates.items():
+        if (
+            locality
+            and locality in normalized_question
+        ):
+            county_only_matches.append(
+                (
+                    locality,
+                    candidate_rows,
                 )
-                for row, _ in best_matches
+            )
+
+    if county_only_matches:
+        longest_length = max(
+            len(locality)
+            for locality, _ in county_only_matches
+        )
+
+        best_county_names = [
+            (
+                locality,
+                candidate_rows,
+            )
+            for locality, candidate_rows
+            in county_only_matches
+            if len(locality) == longest_length
+        ]
+
+        if len(best_county_names) != 1:
+            candidate_names = sorted(
+                {
+                    str(
+                        row["location_name"]
+                    )
+                    for _, rows
+                    in best_county_names
+                    for row in rows
+                }
+            )
+
+            raise ResolutionError(
+                "County resolution was ambiguous among "
+                "validated locations: "
+                + "; ".join(candidate_names)
+                + ". Please specify the state."
+            )
+
+        (
+            locality,
+            candidate_rows,
+        ) = best_county_names[0]
+
+        if len(candidate_rows) == 1:
+            row = candidate_rows[0]
+
+            return {
+                "fips": str(
+                    row["fips"]
+                ).zfill(5),
+                "location_name": str(
+                    row["location_name"]
+                ),
+                "match_score": 1.0,
             }
+
+        names = sorted(
+            str(
+                row["location_name"]
+            )
+            for row in candidate_rows
         )
 
         raise ResolutionError(
-            "County resolution was ambiguous among "
-            f"validated locations: {names}."
+            f"County '{locality}' is ambiguous. "
+            "Possible validated matches are: "
+            + "; ".join(names)
+            + ". Please specify the state."
         )
 
-    row, _ = best_matches[0]
-
-    return {
-        "fips": str(
-            row["fips"]
-        ).zfill(5),
-        "location_name": str(
-            row["location_name"]
-        ),
-        "match_score": 1.0,
-    }
+    raise ResolutionError(
+        "No current county could be resolved "
+        "from the question."
+    )
 
 
 def resolve_demographic_groups(
@@ -785,9 +899,7 @@ def resolve_plan(
 
             plan.resolved_context.update(
                 {
-                    "fips": county[
-                        "fips"
-                    ],
+                    "fips": county["fips"],
                     "location_name": county[
                         "location_name"
                     ],
@@ -864,12 +976,9 @@ def resolve_plan(
         elif plan.intent == (
             AnalysisIntent.TREND_COMPARISON
         ):
-            try:
-                county = resolve_county(
-                    county_resolution_text
-                )
-            except ResolutionError:
-                county = None
+            county = resolve_county(
+                county_resolution_text
+            )
 
             cause = resolve_cause(
                 cause_resolution_text
@@ -886,11 +995,9 @@ def resolve_plan(
                     step.parameters[
                         "cause_id"
                     ] = cause["cause_id"]
-
-                    if county is not None:
-                        step.parameters[
-                            "fips"
-                        ] = county["fips"]
+                    step.parameters[
+                        "fips"
+                    ] = county["fips"]
 
                 elif (
                     step.operation
@@ -927,9 +1034,11 @@ def resolve_plan(
 
             plan.resolved_context.update(
                 {
-                    "cause_id": cause[
-                        "cause_id"
+                    "fips": county["fips"],
+                    "location_name": county[
+                        "location_name"
                     ],
+                    "cause_id": cause["cause_id"],
                     "cause_name": cause[
                         "cause_name"
                     ],
@@ -946,28 +1055,11 @@ def resolve_plan(
                     "last_year"
                 ] = last_year
 
-            if county is None:
-                plan.unresolved_items.append(
-                    "A county must be supplied before "
-                    "the trend plan can execute."
-                )
-            else:
-                plan.assumptions.append(
-                    "Resolved county: "
-                    f"{county['location_name']} "
-                    f"({county['fips']})."
-                )
-
-                plan.resolved_context.update(
-                    {
-                        "fips": county[
-                            "fips"
-                        ],
-                        "location_name": county[
-                            "location_name"
-                        ],
-                    }
-                )
+            plan.assumptions.append(
+                "Resolved county: "
+                f"{county['location_name']} "
+                f"({county['fips']})."
+            )
 
         elif plan.intent == (
             AnalysisIntent.COUNTY_RANKING
@@ -1000,9 +1092,7 @@ def resolve_plan(
 
             plan.resolved_context.update(
                 {
-                    "cause_id": cause[
-                        "cause_id"
-                    ],
+                    "cause_id": cause["cause_id"],
                     "cause_name": cause[
                         "cause_name"
                     ],
