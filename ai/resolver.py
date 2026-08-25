@@ -551,6 +551,54 @@ def resolve_county(
     )
 
 
+def _normalize_age_group_name(
+    value: str,
+) -> str:
+    """
+    Normalize common natural-language age-range forms to the
+    canonical CountyHealth age-group representation.
+
+    Examples:
+    - "60-64" -> "60 to 64"
+    - "60–64" -> "60 to 64"
+    - "60 — 64" -> "60 to 64"
+    - "ages 60-64" -> "60 to 64"
+    - "age 60 to 64" -> "60 to 64"
+
+    Values that do not match a simple bounded age range are
+    returned unchanged so resolution remains fail-closed.
+    """
+    normalized = _normalize_text(
+        value
+    )
+
+    match = re.fullmatch(
+        (
+            r"(?:(?:age|ages)\s+)?"
+            r"(\d{1,3})\s+"
+            r"(?:to\s+)?"
+            r"(\d{1,3})"
+        ),
+        normalized,
+    )
+
+    if match is None:
+        return value.strip()
+
+    lower = int(
+        match.group(1)
+    )
+
+    upper = int(
+        match.group(2)
+    )
+
+    if lower >= upper:
+        return value.strip()
+
+    return f"{lower} to {upper}"
+
+
 def resolve_demographic_groups(
     classified: ClassifiedQuestion,
 ) -> dict[str, Any]:
@@ -685,12 +733,19 @@ def resolve_demographic_groups(
             .casefold()
         )
 
-        canonical_requested = (
-            dimension_aliases.get(
-                normalized_requested,
-                requested_name,
+        if str(dimension) == "Age group":
+            canonical_requested = (
+                _normalize_age_group_name(
+                    requested_name
+                )
             )
-        )
+        else:
+            canonical_requested = (
+                dimension_aliases.get(
+                    normalized_requested,
+                    requested_name,
+                )
+            )
 
         match = groups.loc[
             groups["group_name"]
