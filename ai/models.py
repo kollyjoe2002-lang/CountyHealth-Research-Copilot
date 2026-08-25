@@ -292,3 +292,55 @@ class ResearchAssistantOutcome:
     rejection_reason: str | None = None
 
     ai_error: str | None = None
+    
+class TelemetryOutcome(str, Enum):
+    """
+    High-level telemetry classification for one research-assistant run.
+    """
+
+    ANSWER = "answer"
+    CLARIFY = "clarify"
+    REJECT = "reject"
+    ERROR = "error"
+
+
+@dataclass(frozen=True)
+class ResearchTelemetryEvent:
+    """
+    Privacy-conscious structured telemetry for one research-assistant run.
+
+    Raw research-question text is intentionally excluded. The event stores
+    only operational metadata needed for beta evaluation and reliability
+    monitoring.
+    """
+
+    event_id: str
+    timestamp_utc: str
+
+    outcome: TelemetryOutcome
+    intent: str
+
+    semantic_confidence: float
+    policy_decision: str
+
+    assumptions_count: int
+    unresolved_items_count: int
+
+    evidence_item_count: int
+    evidence_warning_count: int
+
+    interpretation_succeeded: bool
+    ai_error_present: bool
+
+    latency_ms: float | None = None
+
+    county_resolved: bool = False
+    cause_resolved: bool = False
+    demographic_dimension_present: bool = False
+
+    clarification_present: bool = False
+    rejection_present: bool = False
+
+    metadata: dict[str, Any] = field(
+        default_factory=dict
+    )
