@@ -13,30 +13,24 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from ai.classifier import classify_question
-from ai.executor import ExecutionError, execute_plan
 from ai.exporter import (
     default_report_filename,
     export_docx_bytes,
     export_markdown_bytes,
 )
-from ai.planner import build_analysis_plan
-from ai.resolver import resolve_plan
+
 from ai.report_writer import (
     report_to_markdown,
     write_research_report,
 )
+
 from ai.figures import (
     FigureGenerationError,
     build_evidence_figure,
 )
-from ai.validation import (
-    QuestionValidationError,
-    validate_question,
-)
 from ai.research_assistant import (
     ResearchAssistantError,
-    interpret_evidence_bundle,
+    run_research_assistant,
 )
 
 # ============================================================================
@@ -55,8 +49,12 @@ st.set_page_config(
 # ============================================================================
 
 def initialize_session_state() -> None:
+    """
+    Initialize Research Assistant page state.
+    """
     defaults = {
         "research_report_question": "",
+        "research_report_outcome": None,
         "research_report_classified": None,
         "research_report_plan": None,
         "research_report_evidence": None,
@@ -73,6 +71,14 @@ def initialize_session_state() -> None:
 
 
 def clear_results() -> None:
+    """
+    Clear all generated Research Assistant results while preserving
+    the current research-question text.
+    """
+    st.session_state[
+        "research_report_outcome"
+    ] = None
+
     st.session_state[
         "research_report_classified"
     ] = None
@@ -90,85 +96,106 @@ def clear_results() -> None:
     ] = None
 
     st.session_state[
+        "research_report_interpretation_input"
+    ] = None
+
+    st.session_state[
+        "research_report_interpretation"
+    ] = None
+
+    st.session_state[
+        "research_report_ai_error"
+    ] = None
+
+    st.session_state[
         "research_report_error"
     ] = None
-    
-    st.session_state[
-    "research_report_interpretation_input"
-] = None
-
-st.session_state[
-    "research_report_interpretation"
-] = None
-
-st.session_state[
-    "research_report_ai_error"
-] = None
 
 
 def run_research_pipeline(
     question: str,
 ) -> None:
+    """
+    Run the canonical EpiCounty research-assistant orchestrator
+    and adapt its structured outcome to Streamlit session state.
+
+    This function performs no independent classification, planning,
+    entity resolution, analytical execution, or AI interpretation.
+    Those responsibilities belong to run_research_assistant().
+    """
     clear_results()
 
     try:
-        classified = classify_question(
+        outcome = run_research_assistant(
             question
         )
 
-        validate_question(
-            classified
-        )
+        st.session_state[
+            "research_report_outcome"
+        ] = outcome
 
-        plan = build_analysis_plan(
-            classified
-        )
-
-        resolved_plan = resolve_plan(
-            classified,
-            plan,
-        )
-
-        if resolved_plan.unresolved_items:
-            unresolved_text = "; ".join(
-                resolved_plan.unresolved_items
+        if outcome.status == "clarify":
+            message = (
+                outcome.clarification_question
+                or outcome.policy_result.reason
+                or (
+                    "The research question requires additional "
+                    "information before it can be executed."
+                )
             )
 
-            raise ExecutionError(
-                "The research question could not be fully "
-                f"resolved: {unresolved_text}"
+            st.session_state[
+                "research_report_error"
+            ] = (
+                "Additional information is needed: "
+                f"{message}"
             )
 
-        evidence = execute_plan(
-            resolved_plan
-        )
+            st.session_state[
+                "research_report_classified"
+            ] = outcome.classified_question
+
+            st.session_state[
+                "research_report_plan"
+            ] = outcome.resolved_plan
+
+            return
+
+        if outcome.status == "reject":
+            message = (
+                outcome.rejection_reason
+                or outcome.policy_result.reason
+                or (
+                    "The requested analytical operation is not "
+                    "supported by the current EpiCounty engine."
+                )
+            )
+
+            st.session_state[
+                "research_report_error"
+            ] = message
+
+            return
+
+        evidence = outcome.evidence_bundle
+
+        if evidence is None:
+            raise ResearchAssistantError(
+                "The research assistant completed without producing "
+                "a validated evidence bundle."
+            )
 
         report = write_research_report(
             evidence
         )
 
-        interpretation_input = None
-        interpretation = None
-        ai_error = None
-
-        try:
-            (
-                interpretation_input,
-                interpretation,
-            ) = interpret_evidence_bundle(
-                evidence
-            )
-
-        except ResearchAssistantError as exc:
-            ai_error = str(exc)
-
         st.session_state[
             "research_report_classified"
-        ] = classified
+        ] = outcome.classified_question
 
         st.session_state[
             "research_report_plan"
-        ] = resolved_plan
+        ] = outcome.resolved_plan
 
         st.session_state[
             "research_report_evidence"
@@ -180,20 +207,29 @@ def run_research_pipeline(
 
         st.session_state[
             "research_report_interpretation_input"
-        ] = interpretation_input
+        ] = outcome.interpretation_input
 
         st.session_state[
             "research_report_interpretation"
-        ] = interpretation
+        ] = outcome.interpretation_result
 
         st.session_state[
             "research_report_ai_error"
-        ] = ai_error
+        ] = outcome.ai_error
+
+    except ResearchAssistantError as exc:
+        st.session_state[
+            "research_report_error"
+        ] = str(exc)
 
     except Exception as exc:
         st.session_state[
             "research_report_error"
-        ] = str(exc)
+        ] = (
+            "The research report interface encountered an "
+            f"unexpected error: {exc}"
+        )
+
 
 def display_plan() -> None:
     plan = st.session_state.get(
