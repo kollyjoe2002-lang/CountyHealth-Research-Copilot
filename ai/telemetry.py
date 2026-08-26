@@ -10,7 +10,34 @@ from ai.models import (
     TelemetryOutcome,
 )
 
+from ai.telemetry_store import append_telemetry_event
 
+def persist_research_telemetry(
+    outcome: ResearchAssistantOutcome,
+    *,
+    latency_ms: float | None = None,
+) -> None:
+    """
+    Build and persist one telemetry event.
+
+    Telemetry failure must never interrupt the research-assistant
+    analytical pipeline.
+    """
+
+    try:
+        event = build_research_telemetry_event(
+            outcome,
+            latency_ms=latency_ms,
+        )
+
+        append_telemetry_event(
+            event
+        )
+
+    except Exception:
+        pass
+    
+    
 def build_research_telemetry_event(
     outcome: ResearchAssistantOutcome,
     *,

@@ -191,7 +191,8 @@ def _interpret_disparity(
             f"in the {dimension} comparison."
         ),
         (
-            f"The median signed disparity gap was "
+            f"The median signed disparity gap, defined as "
+            f"{group_a_name} minus {group_b_name}, was "
             f"{_format_number(ranking['absolute_gap'].median())} "
             "YLL-rate units."
         ),
@@ -1143,10 +1144,15 @@ def build_evidence_claims(
                     "group_b_id": bundle.context.get(
                         "group_b_id"
                     ),
-                    "group_b_name": group_b_name,
-                    "year": year,
-                    "measure": "YLL rate",
-                    "units": "YLL-rate units",
+"group_b_name": group_b_name,
+"year": year,
+"measure": "YLL rate",
+"units": "YLL-rate units",
+"signed_gap_definition": (
+    f"{group_a_name} minus {group_b_name}"
+),
+"signed_gap_group_a": group_a_name,
+"signed_gap_group_b": group_b_name,
                 },
             )
         )

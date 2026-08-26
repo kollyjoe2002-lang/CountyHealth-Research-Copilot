@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import perf_counter
+
 from ai.entailment_judge import OpenAIEntailmentJudge, validate_model_entailment
 from ai.executor import execute_plan
 from ai.interpreter import build_interpretation_input
@@ -19,6 +21,7 @@ from ai.request_policy import apply_request_policy
 from ai.resolver import resolve_plan
 from ai.semantic_adapter import semantic_request_to_classified
 from ai.semantic_entailment import validate_semantic_entailment
+from ai.telemetry import persist_research_telemetry
 from ai.validation import validate_question
 
 class ResearchAssistantError(RuntimeError):
@@ -131,6 +134,22 @@ def run_research_assistant(
         The requested analytical capability is not supported by the
         current validated engine.
     """
+    started_at = perf_counter()
+
+    def finalize(
+        outcome: ResearchAssistantOutcome,
+    ) -> ResearchAssistantOutcome:
+        latency_ms = (
+            perf_counter() - started_at
+        ) * 1000.0
+
+        persist_research_telemetry(
+            outcome,
+            latency_ms=latency_ms,
+        )
+
+        return outcome
+
     cleaned = question_text.strip()
 
     if not cleaned:
@@ -167,22 +186,26 @@ def run_research_assistant(
                 )
             )
 
-            return ResearchAssistantOutcome(
-                status="clarify",
-                semantic_request=semantic_request,
-                policy_result=policy_result,
-                clarification_question=clarification,
+            return finalize(
+                ResearchAssistantOutcome(
+                    status="clarify",
+                    semantic_request=semantic_request,
+                    policy_result=policy_result,
+                    clarification_question=clarification,
+                )
             )
 
         if (
             policy_result.decision
             is RequestPolicyDecision.REJECT
         ):
-            return ResearchAssistantOutcome(
-                status="reject",
-                semantic_request=semantic_request,
-                policy_result=policy_result,
-                rejection_reason=policy_result.reason,
+            return finalize(
+                ResearchAssistantOutcome(
+                    status="reject",
+                    semantic_request=semantic_request,
+                    policy_result=policy_result,
+                    rejection_reason=policy_result.reason,
+                )
             )
 
         classified = semantic_request_to_classified(
@@ -210,17 +233,19 @@ def run_research_assistant(
             )
 
         if resolved_plan.unresolved_items:
-            return ResearchAssistantOutcome(
-                status="clarify",
-                semantic_request=semantic_request,
-                policy_result=policy_result,
-                classified_question=classified,
-                resolved_plan=resolved_plan,
-                clarification_question=(
-                    " ".join(
-                        resolved_plan.unresolved_items
-                    )
-                ),
+            return finalize(
+                ResearchAssistantOutcome(
+                    status="clarify",
+                    semantic_request=semantic_request,
+                    policy_result=policy_result,
+                    classified_question=classified,
+                    resolved_plan=resolved_plan,
+                    clarification_question=(
+                        " ".join(
+                            resolved_plan.unresolved_items
+                        )
+                    ),
+                )
             )
 
         evidence = execute_plan(
@@ -244,16 +269,18 @@ def run_research_assistant(
         except ResearchAssistantError as exc:
             ai_error = str(exc)
 
-        return ResearchAssistantOutcome(
-            status="answer",
-            semantic_request=semantic_request,
-            policy_result=policy_result,
-            classified_question=classified,
-            resolved_plan=resolved_plan,
-            evidence_bundle=evidence,
-            interpretation_input=interpretation_input,
-            interpretation_result=interpretation_result,
-            ai_error=ai_error,
+        return finalize(
+            ResearchAssistantOutcome(
+                status="answer",
+                semantic_request=semantic_request,
+                policy_result=policy_result,
+                classified_question=classified,
+                resolved_plan=resolved_plan,
+                evidence_bundle=evidence,
+                interpretation_input=interpretation_input,
+                interpretation_result=interpretation_result,
+                ai_error=ai_error,
+            )
         )
 
     except ResearchAssistantError:
