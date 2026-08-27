@@ -147,9 +147,34 @@ def main() -> None:
                     f"{case.case_id}: unexpected failure: {exc}"
                 )
                 print("FAIL:", exc)
+
             else:
+                error_text = str(exc)
+
+                expected_rejection = (
+                    "The requested analytical operation is not "
+                    "supported by the current EpiCounty analytical engine."
+                )
+
+                if expected_rejection not in error_text:
+                    failures.append(
+                        f"{case.case_id}: expected unsupported-capability "
+                        f"rejection, received a different failure: "
+                        f"{error_text}"
+                    )
+
+                    print(
+                        "FAIL: expected unsupported-capability rejection"
+                    )
+                    print(
+                        "Actual failure:",
+                        error_text,
+                    )
+
+                    continue
+
                 print("PASS: safely rejected")
-                print("Reason:", exc)
+                print("Reason:", error_text)
                 passed += 1
 
     print()

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -39,7 +39,7 @@ from ai.research_assistant import (
 
 st.set_page_config(
     page_title="Research Report",
-    page_icon="🧠",
+    page_icon="ðŸ§ ",
     layout="wide",
 )
 
@@ -62,6 +62,7 @@ def initialize_session_state() -> None:
         "research_report_interpretation_input": None,
         "research_report_interpretation": None,
         "research_report_ai_error": None,
+        "research_report_message_type": None,
         "research_report_error": None,
     }
 
@@ -108,6 +109,10 @@ def clear_results() -> None:
     ] = None
 
     st.session_state[
+    "research_report_message_type"
+    ] = None
+
+    st.session_state[
         "research_report_error"
     ] = None
 
@@ -145,11 +150,12 @@ def run_research_pipeline(
             )
 
             st.session_state[
+                "research_report_message_type"
+            ] = "clarify"
+
+            st.session_state[
                 "research_report_error"
-            ] = (
-                "Additional information is needed: "
-                f"{message}"
-            )
+            ] = message
 
             st.session_state[
                 "research_report_classified"
@@ -171,6 +177,9 @@ def run_research_pipeline(
                 )
             )
 
+            st.session_state[
+                "research_report_message_type"
+            ] = "reject"
             st.session_state[
                 "research_report_error"
             ] = message
@@ -217,12 +226,11 @@ def run_research_pipeline(
             "research_report_ai_error"
         ] = outcome.ai_error
 
-    except ResearchAssistantError as exc:
-        st.session_state[
-            "research_report_error"
-        ] = str(exc)
-
     except Exception as exc:
+        st.session_state[
+            "research_report_message_type"
+        ] = "error"
+
         st.session_state[
             "research_report_error"
         ] = (
@@ -482,8 +490,8 @@ def display_ai_interpretation() -> None:
         for claim_id in (
             interpretation.direct_answer.supporting_claim_ids
         ):
-            st.code(
-                claim_id
+            st.caption(
+                f"Evidence ID: `{claim_id}`"
             )
 
             if interpretation_input is not None:
@@ -517,8 +525,8 @@ def display_ai_interpretation() -> None:
                 for claim_id in (
                     statement.supporting_claim_ids
                 ):
-                    st.code(
-                        claim_id
+                    st.caption(
+                        f"Evidence ID: `{claim_id}`"
                     )
 
                     if interpretation_input is not None:
@@ -554,8 +562,8 @@ def display_ai_interpretation() -> None:
             st.warning(
                 warning
             )
-            
-            
+
+
 def display_downloads() -> None:
     report = st.session_state.get(
         "research_report_report"
@@ -777,21 +785,41 @@ if generate_clicked:
                 cleaned_question
             )
 
-error_message = st.session_state.get(
+message = st.session_state.get(
     "research_report_error"
 )
 
-if error_message:
-    st.error(
-        error_message
-    )
+message_type = st.session_state.get(
+    "research_report_message_type"
+)
 
-    st.info(
-        "Try one of the example questions. "
-        "The current deterministic version supports county profiles, "
-        "single-county trends, county rankings, and demographic "
-        "disparity comparisons."
-    )
+if message:
+    if message_type == "clarify":
+        st.info(
+            f"More information is needed: {message}"
+        )
+
+    elif message_type == "reject":
+        st.warning(
+            message
+        )
+
+        st.caption(
+            "EpiCounty currently supports county profiles, "
+            "single-county trends, county rankings, and "
+            "demographic disparity comparisons."
+        )
+
+    else:
+        st.error(
+            message
+        )
+
+        st.info(
+            "The research assistant encountered a technical "
+            "problem while processing this request. "
+            "Please try again."
+        )
 
 report = st.session_state.get(
     "research_report_report"
