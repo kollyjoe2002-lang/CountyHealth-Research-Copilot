@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -37,6 +37,11 @@ from ai.research_assistant import (
     run_research_assistant,
 )
 
+from ai.feedback_store import (
+    append_research_feedback,
+    build_research_feedback,
+)
+
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
@@ -60,6 +65,7 @@ def initialize_session_state() -> None:
         "research_report_question": "",
         "research_report_outcome": None,
         "research_report_classified": None,
+        "research_report_feedback_submitted": False,
         "research_report_plan": None,
         "research_report_evidence": None,
         "research_report_anonymous_session_id": None,
@@ -122,6 +128,10 @@ def clear_results() -> None:
     st.session_state[
         "research_report_message_type"
     ] = None
+
+    st.session_state[
+    "research_report_feedback_submitted"
+    ] = False
 
     st.session_state[
         "research_report_error"
@@ -680,6 +690,125 @@ def display_research_figure() -> None:
             f"A research figure could not be generated: {exc}"
         )
 
+
+def display_research_feedback_form() -> None:
+    """
+    Display a privacy-conscious feedback form for one completed result.
+    """
+
+    outcome = st.session_state.get(
+        "research_report_outcome"
+    )
+
+    anonymous_session_id = st.session_state.get(
+        "research_report_anonymous_session_id"
+    )
+
+    if st.session_state.get(
+        "research_report_feedback_submitted",
+        False,
+    ):
+        st.success(
+            "Thank you. Feedback has already been recorded "
+            "for this result."
+        )
+        return
+
+    if (
+        outcome is None
+        or outcome.status != "answer"
+        or anonymous_session_id is None
+    ):
+        return
+
+    st.markdown("### Researcher Feedback")
+
+    st.caption(
+        "Help us evaluate the EpiCounty research beta. "
+        "Your raw research question is not stored with this feedback."
+    )
+
+    with st.form(
+        "research_feedback_form",
+        clear_on_submit=True,
+    ):
+        helpfulness = st.radio(
+            "Was this result helpful?",
+            options=[
+                "Yes",
+                "Partly",
+                "No",
+            ],
+            horizontal=True,
+        )
+
+        clarity = st.radio(
+            "Was the result clear?",
+            options=[
+                "Clear",
+                "Somewhat clear",
+                "Unclear",
+            ],
+            horizontal=True,
+        )
+
+        perceived_accuracy = st.radio(
+            "How accurate did the result appear?",
+            options=[
+                "Accurate",
+                "Unsure",
+                "Inaccurate",
+            ],
+            horizontal=True,
+        )
+
+        optional_comment = st.text_area(
+            "Optional comment",
+            placeholder=(
+                "What worked well, or what could be improved?"
+            ),
+            height=100,
+        )
+
+        submitted = st.form_submit_button(
+            "Submit feedback"
+        )
+
+    if submitted:
+        feedback = build_research_feedback(
+            anonymous_session_id=(
+                anonymous_session_id
+            ),
+            beta_cohort="beta_2026_01",
+            helpfulness=helpfulness,
+            clarity=clarity,
+            perceived_accuracy=(
+                perceived_accuracy
+            ),
+            intent=outcome.semantic_request.intent.value,
+            optional_comment=optional_comment,
+        )
+
+        try:
+            append_research_feedback(
+                feedback
+            )
+
+        except Exception as exc:
+            st.error(
+                "Feedback could not be saved. "
+                f"Please try again. Technical detail: {exc}"
+            )
+
+        else:
+            st.session_state[
+                "research_report_feedback_submitted"
+            ] = True
+
+            st.success(
+                "Thank you. Your feedback was recorded."
+            )
+
 # ============================================================================
 # PAGE
 # ============================================================================
@@ -887,6 +1016,9 @@ if report is not None:
 
     display_downloads()
 
+    st.markdown("---")
+
+    display_research_feedback_form()
 
 # ============================================================================
 # METHODS NOTE
