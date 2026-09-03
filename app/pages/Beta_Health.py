@@ -13,12 +13,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from ai.telemetry_summary import build_telemetry_summary
-
+from ai.telemetry_summary import (
+    TelemetryTrafficScope,
+    build_telemetry_summary,
+)
 
 st.set_page_config(
     page_title="Beta Health",
-    page_icon="📊",
+    page_icon="ðŸ“Š",
     layout="wide",
 )
 
@@ -29,7 +31,7 @@ def _format_rate(value: float) -> str:
 
 def _format_latency(value: float | None) -> str:
     if value is None:
-        return "—"
+        return "â€”"
 
     if value >= 1000:
         return f"{value / 1000:.2f} s"
@@ -71,15 +73,56 @@ st.caption(
     "Raw researcher questions are not stored in this telemetry system."
 )
 
-summary = build_telemetry_summary()
+st.markdown("## Traffic Scope")
+
+traffic_scope_label = st.selectbox(
+    "Show telemetry for",
+    options=[
+        "External beta researchers",
+        "All traffic",
+        "Development / internal",
+    ],
+    index=0,
+)
+
+traffic_scope_map = {
+    "External beta researchers": (
+        TelemetryTrafficScope.EXTERNAL_BETA
+    ),
+    "All traffic": TelemetryTrafficScope.ALL,
+    "Development / internal": (
+        TelemetryTrafficScope.INTERNAL
+    ),
+}
+
+traffic_scope = traffic_scope_map[traffic_scope_label]
+
+if traffic_scope == TelemetryTrafficScope.EXTERNAL_BETA:
+    st.caption(
+        "External beta metrics include only requests tagged as "
+        "beta traffic from external researcher sessions."
+    )
+
+elif traffic_scope == TelemetryTrafficScope.INTERNAL:
+    st.caption(
+        "Internal metrics include development, testing, and legacy "
+        "telemetry not classified as external beta traffic."
+    )
+
+else:
+    st.caption(
+        "All traffic combines external beta and internal/development "
+        "telemetry."
+    )
+
+summary = build_telemetry_summary(
+    traffic_scope=traffic_scope
+)
 
 if summary.total_requests == 0:
     st.info(
-        "No beta telemetry events are currently available. "
-        "This page will populate automatically after researchers "
-        "begin using the Research Assistant."
+        "No telemetry events are available for the selected traffic scope."
     )
-
     st.stop()
 
 

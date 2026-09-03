@@ -112,6 +112,7 @@ def run_research_assistant(
     provider: OpenAIInterpretationProvider | None = None,
     judge: OpenAIEntailmentJudge | None = None,
     semantic_parser: OpenAISemanticParser | None = None,
+    telemetry_context: TelemetryContext | None = None,
 ) -> ResearchAssistantOutcome:
     """
     Run the complete validated EpiCounty research-assistant
@@ -146,6 +147,7 @@ def run_research_assistant(
         persist_research_telemetry(
             outcome,
             latency_ms=latency_ms,
+            context=telemetry_context,
         )
 
         return outcome
@@ -300,6 +302,7 @@ def answer_research_question(
     provider: OpenAIInterpretationProvider | None = None,
     judge: OpenAIEntailmentJudge | None = None,
     semantic_parser: OpenAISemanticParser | None = None,
+    telemetry_context: TelemetryContext | None = None,
 ) -> tuple[InterpretationInput, InterpretationResult]:
     """
     Run the complete validated EpiCounty research-assistant pipeline
@@ -316,6 +319,7 @@ def answer_research_question(
         provider=provider,
         judge=judge,
         semantic_parser=semantic_parser,
+        telemetry_context=telemetry_context,
     )
 
     if outcome.status == "clarify":

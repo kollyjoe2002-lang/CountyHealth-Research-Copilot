@@ -1,7 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 import pandas as pd
 import streamlit as st
@@ -28,6 +29,9 @@ from ai.figures import (
     FigureGenerationError,
     build_evidence_figure,
 )
+
+from ai.models import TelemetryContext
+
 from ai.research_assistant import (
     ResearchAssistantError,
     run_research_assistant,
@@ -58,6 +62,7 @@ def initialize_session_state() -> None:
         "research_report_classified": None,
         "research_report_plan": None,
         "research_report_evidence": None,
+        "research_report_anonymous_session_id": None,
         "research_report_report": None,
         "research_report_interpretation_input": None,
         "research_report_interpretation": None,
@@ -69,6 +74,12 @@ def initialize_session_state() -> None:
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    if st.session_state[
+        "research_report_anonymous_session_id"
+    ] is None:
+        st.session_state[
+            "research_report_anonymous_session_id"
+        ] = str(uuid4())
 
 
 def clear_results() -> None:
@@ -109,7 +120,7 @@ def clear_results() -> None:
     ] = None
 
     st.session_state[
-    "research_report_message_type"
+        "research_report_message_type"
     ] = None
 
     st.session_state[
@@ -131,8 +142,18 @@ def run_research_pipeline(
     clear_results()
 
     try:
+        telemetry_context = TelemetryContext(
+            environment="beta",
+            traffic_source="external_researcher",
+            beta_cohort="beta_2026_01",
+            anonymous_session_id=st.session_state[
+                "research_report_anonymous_session_id"
+            ],
+        )
+
         outcome = run_research_assistant(
-            question
+            question,
+            telemetry_context=telemetry_context,
         )
 
         st.session_state[

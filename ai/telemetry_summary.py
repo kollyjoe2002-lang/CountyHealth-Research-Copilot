@@ -7,6 +7,16 @@ import duckdb
 
 from ai.telemetry_store import DEFAULT_TELEMETRY_DB_FILE
 
+from enum import Enum
+
+class TelemetryTrafficScope(str, Enum):
+    """
+    Supported provenance scopes for deterministic telemetry aggregation.
+    """
+
+    ALL = "all"
+    EXTERNAL_BETA = "external_beta"
+    INTERNAL = "internal"
 
 @dataclass(frozen=True)
 class TelemetrySummary:
@@ -61,10 +71,80 @@ def _safe_rate(
     return numerator / denominator
 
 
+def _build_scope_filter(
+    traffic_scope: TelemetryTrafficScope,
+) -> tuple[str, list[str]]:
+    """
+    Return a trusted SQL predicate and parameters for one supported
+    telemetry provenance scope.
+
+    Legacy rows with empty metadata are treated as internal traffic.
+    """
+
+    if traffic_scope == TelemetryTrafficScope.ALL:
+        return "TRUE", []
+
+    if traffic_scope == TelemetryTrafficScope.EXTERNAL_BETA:
+        return (
+            """
+            COALESCE(
+                json_extract_string(
+                    metadata_json,
+                    '$.environment'
+                ),
+                ''
+            ) = ?
+            AND COALESCE(
+                json_extract_string(
+                    metadata_json,
+                    '$.traffic_source'
+                ),
+                ''
+            ) = ?
+            """,
+            [
+                "beta",
+                "external_researcher",
+            ],
+        )
+
+    if traffic_scope == TelemetryTrafficScope.INTERNAL:
+        return (
+            """
+            NOT (
+                COALESCE(
+                    json_extract_string(
+                        metadata_json,
+                        '$.environment'
+                    ),
+                    ''
+                ) = ?
+                AND COALESCE(
+                    json_extract_string(
+                        metadata_json,
+                        '$.traffic_source'
+                    ),
+                    ''
+                ) = ?
+            )
+            """,
+            [
+                "beta",
+                "external_researcher",
+            ],
+        )
+
+    raise ValueError(
+        f"Unsupported telemetry traffic scope: {traffic_scope}"
+    )
+
+
 def _fetch_count_map(
     connection: duckdb.DuckDBPyConnection,
     *,
     column_name: str,
+    where_sql: str = "TRUE",
+    parameters: list[str] | None = None,
 ) -> dict[str, int]:
     """
     Return counts grouped by one trusted telemetry column.
@@ -88,9 +168,11 @@ def _fetch_count_map(
             {column_name},
             COUNT(*) AS event_count
         FROM research_telemetry
+        WHERE {where_sql}
         GROUP BY {column_name}
         ORDER BY {column_name}
-        """
+        """,
+        parameters or [],
     ).fetchall()
 
     return {
@@ -101,6 +183,10 @@ def _fetch_count_map(
 
 def build_telemetry_summary(
     db_file: Path = DEFAULT_TELEMETRY_DB_FILE,
+    *,
+    traffic_scope: TelemetryTrafficScope = (
+        TelemetryTrafficScope.ALL
+    ),
 ) -> TelemetrySummary:
     """
     Build deterministic aggregate beta-health metrics from the
@@ -132,79 +218,107 @@ def build_telemetry_summary(
         str(db_file),
         read_only=True,
     )
-
+    where_sql, parameters = _build_scope_filter(
+        traffic_scope
+    )
     try:
+        total_requests_row = connection.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM research_telemetry
+            WHERE {where_sql}
+            """,
+            parameters,
+        ).fetchone()
+
         total_requests = int(
-            connection.execute(
-                """
-                SELECT COUNT(*)
-                FROM research_telemetry
-                """
-            ).fetchone()[0]
+            total_requests_row[0]
+            if total_requests_row is not None
+            else 0
         )
 
         answer_count = int(
             connection.execute(
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM research_telemetry
-                WHERE outcome = 'answer'
-                """
+                WHERE
+                    ({where_sql})
+                    AND outcome = 'answer'
+                """,
+                parameters,
             ).fetchone()[0]
         )
-
         clarify_count = int(
             connection.execute(
-                """
-                SELECT COUNT(*)
-                FROM research_telemetry
-                WHERE outcome = 'clarify'
-                """
-            ).fetchone()[0]
-        )
-
-        reject_count = int(
-            connection.execute(
-                """
-                SELECT COUNT(*)
-                FROM research_telemetry
-                WHERE outcome = 'reject'
-                """
-            ).fetchone()[0]
-        )
-
-        interpretation_success_count = int(
-            connection.execute(
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM research_telemetry
                 WHERE
-                    outcome = 'answer'
-                    AND interpretation_succeeded = TRUE
-                """
+                    ({where_sql})
+                    AND outcome = 'clarify'
+                """,
+                parameters,
             ).fetchone()[0]
         )
+
+        reject_row = connection.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM research_telemetry
+            WHERE
+                ({where_sql})
+                AND outcome = 'reject'
+            """,
+            parameters,
+        ).fetchone()
+        reject_count = int(reject_row[0] if reject_row is not None else 0)
+
+        interpretation_success_row = connection.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM research_telemetry
+            WHERE
+                ({where_sql})
+                AND outcome = 'answer'
+                AND interpretation_succeeded = TRUE
+            """,
+            parameters,
+        ).fetchone()
+        interpretation_success_count = int(
+            interpretation_success_row[0]
+            if interpretation_success_row is not None
+            else 0
+        )
+
+        interpretation_failure_row = connection.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM research_telemetry
+            WHERE
+                ({where_sql})
+                AND outcome = 'answer'
+                AND interpretation_succeeded = FALSE
+            """,
+            parameters,
+        ).fetchone()
 
         interpretation_failure_count = int(
-            connection.execute(
-                """
-                SELECT COUNT(*)
-                FROM research_telemetry
-                WHERE
-                    outcome = 'answer'
-                    AND interpretation_succeeded = FALSE
-                """
-            ).fetchone()[0]
+            interpretation_failure_row[0]
+            if interpretation_failure_row is not None
+            else 0
         )
-
         latency_row = connection.execute(
-            """
+            f"""
             SELECT
                 median(latency_ms),
                 quantile_cont(latency_ms, 0.95)
             FROM research_telemetry
-            WHERE latency_ms IS NOT NULL
-            """
+            WHERE
+                ({where_sql})
+                AND latency_ms IS NOT NULL
+            """,
+            parameters,
         ).fetchone()
 
         median_latency_ms = (
@@ -221,24 +335,35 @@ def build_telemetry_summary(
             else None
         )
 
+        evidence_warning_row = connection.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM research_telemetry
+            WHERE
+                ({where_sql})
+                AND evidence_warning_count > 0
+            """,
+            parameters,
+        ).fetchone()
         evidence_warning_event_count = int(
-            connection.execute(
-                """
-                SELECT COUNT(*)
-                FROM research_telemetry
-                WHERE evidence_warning_count > 0
-                """
-            ).fetchone()[0]
+            evidence_warning_row[0]
+            if evidence_warning_row is not None
+            and evidence_warning_row[0] is not None
+            else 0
         )
 
         intent_counts = _fetch_count_map(
             connection,
             column_name="intent",
+            where_sql=where_sql,
+            parameters=parameters,
         )
 
         policy_decision_counts = _fetch_count_map(
             connection,
             column_name="policy_decision",
+            where_sql=where_sql,
+            parameters=parameters,
         )
 
     finally:

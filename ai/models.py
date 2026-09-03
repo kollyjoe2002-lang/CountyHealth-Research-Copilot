@@ -71,8 +71,8 @@ class SemanticAnalysisRequest:
     clarification_question: str | None = None
 
     explanation: str = ""
-    
-    
+
+
 class RequestPolicyDecision(str, Enum):
     """
     Deterministic disposition of a parsed semantic request.
@@ -104,8 +104,8 @@ class RequestPolicyResult:
     assumptions: list[str] = field(
         default_factory=list
     )
-    
-    
+
+
 @dataclass
 class AnalysisStep:
     step_number: int
@@ -188,8 +188,8 @@ class EntailmentJudgment:
 
     label: EntailmentLabel
     rationale: str
-    
-    
+
+
 @dataclass
 class InterpretationInput:
     """
@@ -221,8 +221,8 @@ class InterpretationStatement:
 
     text: str
     supporting_claim_ids: list[str]
-    
-    
+
+
 @dataclass(frozen=True)
 class GroundedAnswer:
     """
@@ -231,8 +231,8 @@ class GroundedAnswer:
 
     text: str
     supporting_claim_ids: list[str]
-    
-    
+
+
 @dataclass
 class InterpretationResult:
     """
@@ -292,7 +292,7 @@ class ResearchAssistantOutcome:
     rejection_reason: str | None = None
 
     ai_error: str | None = None
-    
+
 class TelemetryOutcome(str, Enum):
     """
     High-level telemetry classification for one research-assistant run.
@@ -302,6 +302,23 @@ class TelemetryOutcome(str, Enum):
     CLARIFY = "clarify"
     REJECT = "reject"
     ERROR = "error"
+
+
+@dataclass(frozen=True)
+class TelemetryContext:
+    """
+    Non-identifying provenance describing where a research-assistant
+    request originated.
+
+    This context is operational metadata only. It must not contain
+    researcher names, email addresses, IP addresses, raw questions,
+    or other directly identifying information.
+    """
+
+    environment: str = "development"
+    traffic_source: str = "internal_manual"
+    beta_cohort: str | None = None
+    anonymous_session_id: str | None = None
 
 
 @dataclass(frozen=True)

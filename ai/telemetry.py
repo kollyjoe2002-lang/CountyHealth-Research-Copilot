@@ -7,6 +7,7 @@ from uuid import uuid4
 from ai.models import (
     ResearchAssistantOutcome,
     ResearchTelemetryEvent,
+    TelemetryContext,
     TelemetryOutcome,
 )
 
@@ -16,6 +17,7 @@ def persist_research_telemetry(
     outcome: ResearchAssistantOutcome,
     *,
     latency_ms: float | None = None,
+    context: TelemetryContext | None = None,
 ) -> None:
     """
     Build and persist one telemetry event.
@@ -28,6 +30,7 @@ def persist_research_telemetry(
         event = build_research_telemetry_event(
             outcome,
             latency_ms=latency_ms,
+            context=context,
         )
 
         append_telemetry_event(
@@ -36,12 +39,13 @@ def persist_research_telemetry(
 
     except Exception:
         pass
-    
-    
+
+
 def build_research_telemetry_event(
     outcome: ResearchAssistantOutcome,
     *,
     latency_ms: float | None = None,
+    context: TelemetryContext | None = None,
 ) -> ResearchTelemetryEvent:
     """
     Build a privacy-conscious telemetry event from a completed
@@ -110,6 +114,21 @@ def build_research_telemetry_event(
         )
     )
 
+    active_context = (
+        context
+        if context is not None
+        else TelemetryContext()
+    )
+
+    telemetry_metadata = {
+        "environment": active_context.environment,
+        "traffic_source": active_context.traffic_source,
+        "beta_cohort": active_context.beta_cohort,
+        "anonymous_session_id": (
+            active_context.anonymous_session_id
+        ),
+    }
+
     semantic_request = outcome.semantic_request
 
     return ResearchTelemetryEvent(
@@ -122,6 +141,7 @@ def build_research_telemetry_event(
         semantic_confidence=semantic_request.confidence,
         policy_decision=outcome.policy_result.decision.value,
         assumptions_count=assumptions_count,
+        metadata=telemetry_metadata,
         unresolved_items_count=unresolved_items_count,
         evidence_item_count=evidence_item_count,
         evidence_warning_count=evidence_warning_count,
