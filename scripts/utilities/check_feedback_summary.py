@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
 from ai.feedback_store import (
@@ -18,37 +19,60 @@ def main() -> None:
         )
 
         feedback_rows = [
-            build_research_feedback(
-                anonymous_session_id="session-1",
-                beta_cohort="beta_2026_01",
-                helpfulness="Yes",
-                clarity="Clear",
-                perceived_accuracy="Accurate",
-                intent="county_profile",
+            replace(
+                build_research_feedback(
+                    anonymous_session_id="session-pre-launch",
+                    beta_cohort="beta_2026_01",
+                    helpfulness="No",
+                    clarity="Unclear",
+                    perceived_accuracy="Inaccurate",
+                    intent="county_profile",
+                ),
+                timestamp_utc="2026-09-03T20:00:00+00:00",
             ),
-            build_research_feedback(
-                anonymous_session_id="session-2",
-                beta_cohort="beta_2026_01",
-                helpfulness="Yes",
-                clarity="Somewhat clear",
-                perceived_accuracy="Accurate",
-                intent="trend_comparison",
+            replace(
+                build_research_feedback(
+                    anonymous_session_id="session-1",
+                    beta_cohort="beta_2026_01",
+                    helpfulness="Yes",
+                    clarity="Clear",
+                    perceived_accuracy="Accurate",
+                    intent="county_profile",
+                ),
+                timestamp_utc="2026-09-05T20:00:00+00:00",
             ),
-            build_research_feedback(
-                anonymous_session_id="session-3",
-                beta_cohort="beta_2026_01",
-                helpfulness="Partly",
-                clarity="Clear",
-                perceived_accuracy="Unsure",
-                intent="county_profile",
+            replace(
+                build_research_feedback(
+                    anonymous_session_id="session-2",
+                    beta_cohort="beta_2026_01",
+                    helpfulness="Yes",
+                    clarity="Somewhat clear",
+                    perceived_accuracy="Accurate",
+                    intent="trend_comparison",
+                ),
+                timestamp_utc="2026-09-05T20:05:00+00:00",
             ),
-            build_research_feedback(
-                anonymous_session_id="session-4",
-                beta_cohort="other_cohort",
-                helpfulness="No",
-                clarity="Unclear",
-                perceived_accuracy="Inaccurate",
-                intent="county_ranking",
+            replace(
+                build_research_feedback(
+                    anonymous_session_id="session-3",
+                    beta_cohort="beta_2026_01",
+                    helpfulness="Partly",
+                    clarity="Clear",
+                    perceived_accuracy="Unsure",
+                    intent="county_profile",
+                ),
+                timestamp_utc="2026-09-05T20:10:00+00:00",
+            ),
+            replace(
+                build_research_feedback(
+                    anonymous_session_id="session-4",
+                    beta_cohort="other_cohort",
+                    helpfulness="No",
+                    clarity="Unclear",
+                    perceived_accuracy="Inaccurate",
+                    intent="county_ranking",
+                ),
+                timestamp_utc="2026-09-05T20:15:00+00:00",
             ),
         ]
 
@@ -86,6 +110,7 @@ def main() -> None:
         }
 
         print("PASS: cohort filtering")
+        print("PASS: launch-boundary filtering")
         print("PASS: helpfulness aggregation")
         print("PASS: clarity aggregation")
         print("PASS: perceived-accuracy aggregation")

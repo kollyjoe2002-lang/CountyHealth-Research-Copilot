@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 
 import duckdb
@@ -85,8 +86,11 @@ def _build_scope_filter(
         return "TRUE", []
 
     if traffic_scope == TelemetryTrafficScope.EXTERNAL_BETA:
-        return (
-            """
+        launch_utc = os.getenv(
+            "EPICOUNTY_BETA_LAUNCH_UTC"
+        )
+
+        where_sql = """
             COALESCE(
                 json_extract_string(
                     metadata_json,
@@ -101,12 +105,20 @@ def _build_scope_filter(
                 ),
                 ''
             ) = ?
-            """,
-            [
-                "beta",
-                "external_researcher",
-            ],
-        )
+        """
+
+        parameters = [
+            "beta",
+            "external_researcher",
+        ]
+
+        if launch_utc:
+            where_sql += """
+                AND timestamp_utc >= CAST(? AS TIMESTAMP)
+            """
+            parameters.append(launch_utc)
+
+        return where_sql, parameters
 
     if traffic_scope == TelemetryTrafficScope.INTERNAL:
         return (

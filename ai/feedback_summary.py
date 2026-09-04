@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -88,15 +89,34 @@ def build_feedback_summary(
         read_only=True,
     )
 
-    if beta_cohort is None:
-        where_sql = "TRUE"
-        parameters: list[str] = []
+    launch_utc = os.getenv(
+        "EPICOUNTY_BETA_LAUNCH_UTC"
+    )
 
-    else:
-        where_sql = "beta_cohort = ?"
-        parameters = [
+    where_parts: list[str] = []
+    parameters: list[str] = []
+
+    if beta_cohort is not None:
+        where_parts.append(
+            "beta_cohort = ?"
+        )
+        parameters.append(
             beta_cohort
-        ]
+        )
+
+    if launch_utc:
+        where_parts.append(
+            "timestamp_utc >= CAST(? AS TIMESTAMP)"
+        )
+        parameters.append(
+            launch_utc
+        )
+
+    where_sql = (
+        " AND ".join(where_parts)
+        if where_parts
+        else "TRUE"
+    )
 
     try:
         total_row = connection.execute(

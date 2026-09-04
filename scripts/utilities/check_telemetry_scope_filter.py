@@ -18,10 +18,11 @@ def _event(
     *,
     event_id: str,
     metadata: dict,
+    timestamp_utc: str = "2026-09-05T20:00:00+00:00",
 ) -> ResearchTelemetryEvent:
     return ResearchTelemetryEvent(
         event_id=event_id,
-        timestamp_utc="2026-09-02T20:00:00+00:00",
+        timestamp_utc=timestamp_utc,
         outcome=TelemetryOutcome.ANSWER,
         intent="county_profile",
         semantic_confidence=0.95,
@@ -59,6 +60,16 @@ def main() -> None:
                 metadata={
                     "environment": "development",
                     "traffic_source": "internal_manual",
+                },
+            ),
+            _event(
+                event_id="beta-pre-launch",
+                timestamp_utc="2026-09-03T20:00:00+00:00",
+                metadata={
+                    "environment": "beta",
+                    "traffic_source": "external_researcher",
+                    "beta_cohort": "beta_2026_01",
+                    "anonymous_session_id": "session-pre-launch",
                 },
             ),
             _event(
@@ -106,20 +117,21 @@ def main() -> None:
             ),
         )
 
-        assert all_summary.total_requests == 4
+        assert all_summary.total_requests == 5
         assert external_summary.total_requests == 2
         assert internal_summary.total_requests == 2
 
         assert (
-            external_summary.total_requests
-            + internal_summary.total_requests
-            == all_summary.total_requests
+            all_summary.total_requests
+            - external_summary.total_requests
+            - internal_summary.total_requests
+            == 1
         )
 
-        print("PASS: all traffic count = 4")
-        print("PASS: external beta count = 2")
+        print("PASS: all traffic count = 5")
+        print("PASS: post-launch external beta count = 2")
         print("PASS: internal traffic count = 2")
-        print("PASS: external + internal = all")
+        print("PASS: pre-launch external beta excluded = 1")
 
         print()
         print(
