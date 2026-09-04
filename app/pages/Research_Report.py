@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hmac
 import os
@@ -301,6 +301,22 @@ def clear_results() -> None:
     ] = None
 
 
+def resolve_beta_traffic_source(
+    internal_test_mode: bool,
+) -> str:
+    """
+    Resolve the telemetry traffic source for the current session.
+
+    Internal manual testing must never be counted as genuine
+    external-researcher beta traffic.
+    """
+    return (
+        "internal_manual"
+        if internal_test_mode
+        else "external_researcher"
+    )
+
+
 def run_research_pipeline(
     question: str,
 ) -> None:
@@ -315,10 +331,8 @@ def run_research_pipeline(
     clear_results()
 
     try:
-        traffic_source = (
-            "internal_manual"
-            if is_internal_test_session()
-            else "external_researcher"
+        traffic_source = resolve_beta_traffic_source(
+            is_internal_test_session()
         )
 
         telemetry_context = TelemetryContext(
