@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+import hmac
+import os
 import sys
 from pathlib import Path
 from uuid import uuid4
@@ -42,6 +44,22 @@ from ai.feedback_store import (
     build_research_feedback,
 )
 
+
+# ============================================================================
+# BETA CONFIGURATION
+# ============================================================================
+
+BETA_COHORT = (
+    os.getenv(
+        "EPICOUNTY_BETA_COHORT",
+        "beta_2026_01",
+    ).strip()
+    or "beta_2026_01"
+)
+
+INTERNAL_TEST_TOKEN_ENV = "EPICOUNTY_INTERNAL_TEST_TOKEN"
+INTERNAL_TEST_QUERY_FLAG = "admin"
+
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
@@ -75,17 +93,162 @@ def initialize_session_state() -> None:
         "research_report_ai_error": None,
         "research_report_message_type": None,
         "research_report_error": None,
+        "research_report_internal_test_mode": False,
+        "research_report_internal_test_error": None,
     }
 
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
     if st.session_state[
         "research_report_anonymous_session_id"
     ] is None:
         st.session_state[
             "research_report_anonymous_session_id"
         ] = str(uuid4())
+
+
+def _query_flag_enabled(
+    name: str,
+) -> bool:
+    """
+    Return True when one supported boolean query flag is enabled.
+
+    The admin query flag is not a credential. It only reveals the
+    token-entry control. The actual credential remains server-side.
+    """
+    value = st.query_params.get(name)
+
+    if isinstance(value, list):
+        value = (
+            value[-1]
+            if value
+            else ""
+        )
+
+    return str(value).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def is_internal_test_session() -> bool:
+    """
+    Return whether this Streamlit session is explicitly marked
+    as an internal EpiCounty test session.
+    """
+    return bool(
+        st.session_state.get(
+            "research_report_internal_test_mode",
+            False,
+        )
+    )
+
+
+def render_internal_test_controls() -> None:
+    """
+    Provide session-specific internal-test controls.
+
+    Normal visitors never see these controls.
+
+    A user must deliberately add ?admin=1 to the Research Report
+    page and then enter the server-side internal-test token.
+
+    The token itself is never placed in the URL.
+    """
+    if is_internal_test_session():
+        st.sidebar.warning(
+            "Internal test mode is active."
+        )
+
+        st.sidebar.caption(
+            "Research requests from this browser session are "
+            "tagged as internal traffic. Researcher feedback "
+            "is disabled."
+        )
+
+        if st.sidebar.button(
+            "Exit internal test mode",
+            key="research_report_exit_internal_test",
+        ):
+            st.session_state[
+                "research_report_internal_test_mode"
+            ] = False
+
+            st.session_state[
+                "research_report_internal_test_error"
+            ] = None
+
+            st.rerun()
+
+        return
+
+    if not _query_flag_enabled(
+        INTERNAL_TEST_QUERY_FLAG
+    ):
+        return
+
+    configured_token = os.getenv(
+        INTERNAL_TEST_TOKEN_ENV,
+        "",
+    ).strip()
+
+    with st.sidebar.expander(
+        "Internal test mode",
+        expanded=True,
+    ):
+        if not configured_token:
+            st.error(
+                "Internal test mode is not configured "
+                "on this server."
+            )
+            return
+
+        supplied_token = st.text_input(
+            "Internal test token",
+            type="password",
+            key="research_report_internal_test_token",
+        )
+
+        enable_clicked = st.button(
+            "Enable internal test mode",
+            key="research_report_enable_internal_test",
+        )
+
+        if enable_clicked:
+            if (
+                supplied_token
+                and hmac.compare_digest(
+                    supplied_token,
+                    configured_token,
+                )
+            ):
+                st.session_state[
+                    "research_report_internal_test_mode"
+                ] = True
+
+                st.session_state[
+                    "research_report_internal_test_error"
+                ] = None
+
+                st.rerun()
+
+            else:
+                st.session_state[
+                    "research_report_internal_test_error"
+                ] = (
+                    "The internal test token was not accepted."
+                )
+
+        error = st.session_state.get(
+            "research_report_internal_test_error"
+        )
+
+        if error:
+            st.error(error)
 
 
 def clear_results() -> None:
@@ -152,10 +315,16 @@ def run_research_pipeline(
     clear_results()
 
     try:
+        traffic_source = (
+            "internal_manual"
+            if is_internal_test_session()
+            else "external_researcher"
+        )
+
         telemetry_context = TelemetryContext(
             environment="beta",
-            traffic_source="external_researcher",
-            beta_cohort="beta_2026_01",
+            traffic_source=traffic_source,
+            beta_cohort=BETA_COHORT,
             anonymous_session_id=st.session_state[
                 "research_report_anonymous_session_id"
             ],
@@ -211,6 +380,7 @@ def run_research_pipeline(
             st.session_state[
                 "research_report_message_type"
             ] = "reject"
+
             st.session_state[
                 "research_report_error"
             ] = message
@@ -693,8 +863,19 @@ def display_research_figure() -> None:
 
 def display_research_feedback_form() -> None:
     """
-    Display a privacy-conscious feedback form for one completed result.
+    Display a privacy-conscious feedback form for one completed
+    external-beta result.
+
+    Feedback collection is intentionally disabled during internal
+    testing so internal validation cannot contaminate researcher
+    feedback evidence.
     """
+    if is_internal_test_session():
+        st.info(
+            "Researcher feedback is disabled during internal "
+            "test sessions."
+        )
+        return
 
     outcome = st.session_state.get(
         "research_report_outcome"
@@ -779,7 +960,7 @@ def display_research_feedback_form() -> None:
             anonymous_session_id=(
                 anonymous_session_id
             ),
-            beta_cohort="beta_2026_01",
+            beta_cohort=BETA_COHORT,
             helpfulness=helpfulness,
             clarity=clarity,
             perceived_accuracy=(
@@ -809,15 +990,24 @@ def display_research_feedback_form() -> None:
                 "Thank you. Your feedback was recorded."
             )
 
+
 # ============================================================================
 # PAGE
 # ============================================================================
 
 initialize_session_state()
+render_internal_test_controls()
 
 st.title(
     "AI Research Assistant"
 )
+
+if is_internal_test_session():
+    st.warning(
+        "INTERNAL TEST MODE — requests from this browser session "
+        "are excluded from external-beta telemetry, and researcher "
+        "feedback collection is disabled."
+    )
 
 st.caption(
     "Ask a supported county-level public health question. "
