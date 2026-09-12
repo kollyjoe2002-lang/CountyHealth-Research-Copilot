@@ -53,38 +53,74 @@ def import_county_gis(
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV does not exist: {csv_path}")
 
-    df = pd.read_csv(csv_path, dtype=str)
-
-    required_geography = {
-        "StateAbbr",
-        "StateDesc",
-        "CountyName",
-        "CountyFIPS",
-        "TotalPopulation",
-    }
-
-    missing_geography = required_geography - set(df.columns)
-
-    if missing_geography:
-        raise ValueError(
-            f"Missing required geography columns: "
-            f"{sorted(missing_geography)}"
-        )
-
-    if df["CountyFIPS"].isna().any():
-        raise ValueError("CountyFIPS contains missing values")
-
-    if df["CountyFIPS"].duplicated().any():
-        raise ValueError("CountyFIPS contains duplicates")
-
-    if not df["CountyFIPS"].str.fullmatch(r"\d{5}").all():
-        raise ValueError(
-            "CountyFIPS must contain exactly five digits"
-        )
-
     con = duckdb.connect(str(db_path))
 
     try:
+        con.execute(
+            """
+            DELETE FROM places.import_log
+            WHERE source_file = ?
+            """,
+            [csv_path.name],
+        )
+
+        con.execute(
+            """
+            INSERT INTO places.import_log (
+                source_file,
+                file_path,
+                release_year,
+                geography_level,
+                file_size_bytes,
+                rows_imported,
+                status,
+                started_at,
+                completed_at,
+                error_message
+            )
+            VALUES (
+                ?, ?, ?, 'county', ?, 0,
+                'running', CURRENT_TIMESTAMP, NULL, NULL
+            )
+            """,
+            [
+                csv_path.name,
+                str(csv_path),
+                release_year,
+                csv_path.stat().st_size,
+            ],
+        )
+
+        df = pd.read_csv(csv_path, dtype=str)
+
+        required_geography = {
+            "StateAbbr",
+            "StateDesc",
+            "CountyName",
+            "CountyFIPS",
+            "TotalPopulation",
+        }
+
+        missing_geography = required_geography - set(df.columns)
+
+        if missing_geography:
+            raise ValueError(
+                f"Missing required geography columns: "
+                f"{sorted(missing_geography)}"
+            )
+
+        if df["CountyFIPS"].isna().any():
+            raise ValueError("CountyFIPS contains missing values")
+
+        if df["CountyFIPS"].duplicated().any():
+            raise ValueError("CountyFIPS contains duplicates")
+
+        if not df["CountyFIPS"].str.fullmatch(r"\d{5}").all():
+            raise ValueError(
+                "CountyFIPS must contain exactly five digits"
+            )
+
+
         metadata = con.execute(
             """
             SELECT
@@ -292,11 +328,40 @@ def import_county_gis(
 
         con.execute("COMMIT")
 
-    except Exception:
+        con.execute(
+            """
+            UPDATE places.import_log
+            SET
+                rows_imported = ?,
+                status = 'success',
+                completed_at = CURRENT_TIMESTAMP,
+                error_message = NULL
+            WHERE source_file = ?
+            """,
+            [inserted, csv_path.name],
+        )
+
+    except Exception as exc:
         try:
             con.execute("ROLLBACK")
         except Exception:
             pass
+
+        try:
+            con.execute(
+                """
+                UPDATE places.import_log
+                SET
+                    status = 'error',
+                    completed_at = CURRENT_TIMESTAMP,
+                    error_message = ?
+                WHERE source_file = ?
+                """,
+                [str(exc), csv_path.name],
+            )
+        except Exception:
+            pass
+
         raise
 
     finally:
