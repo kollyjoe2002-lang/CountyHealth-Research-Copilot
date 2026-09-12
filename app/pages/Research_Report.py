@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hmac
 import os
@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 from ai.exporter import (
+    ReportExportError,
     default_report_filename,
     export_docx_bytes,
     export_markdown_bytes,
@@ -780,6 +781,12 @@ def display_ai_interpretation() -> None:
 
 
 def display_downloads() -> None:
+    """
+    Display report download controls.
+
+    Export failures are isolated so that one unavailable export
+    format cannot crash the completed Research Report page.
+    """
     report = st.session_state.get(
         "research_report_report"
     )
@@ -789,15 +796,30 @@ def display_downloads() -> None:
 
     st.markdown("### Download report")
 
-    markdown_bytes = export_markdown_bytes(
-        report
-    )
+    markdown_bytes = None
+    docx_bytes = None
+    markdown_error = None
+    docx_error = None
 
-    docx_bytes = export_docx_bytes(
-        report,
-        include_evidence_tables=True,
-        evidence_row_limit=20,
-    )
+    try:
+        markdown_bytes = export_markdown_bytes(
+            report
+        )
+    except Exception as exc:
+        markdown_error = str(exc)
+
+    try:
+        docx_bytes = export_docx_bytes(
+            report,
+            include_evidence_tables=True,
+            evidence_row_limit=20,
+        )
+    except ReportExportError as exc:
+        docx_error = str(exc)
+    except Exception as exc:
+        docx_error = (
+            f"Unexpected DOCX export failure: {exc}"
+        )
 
     markdown_filename = (
         default_report_filename(
@@ -818,26 +840,47 @@ def display_downloads() -> None:
     )
 
     with download_col_1:
-        st.download_button(
-            label="Download Markdown",
-            data=markdown_bytes,
-            file_name=markdown_filename,
-            mime="text/markdown",
-            width="stretch",
-        )
+        if markdown_bytes is not None:
+            st.download_button(
+                label="Download Markdown",
+                data=markdown_bytes,
+                file_name=markdown_filename,
+                mime="text/markdown",
+                width="stretch",
+            )
+        else:
+            st.warning(
+                "Markdown export is temporarily unavailable."
+            )
+
+            if markdown_error:
+                with st.expander(
+                    "Markdown export details"
+                ):
+                    st.write(markdown_error)
 
     with download_col_2:
-        st.download_button(
-            label="Download DOCX",
-            data=docx_bytes,
-            file_name=docx_filename,
-            mime=(
-                "application/vnd.openxmlformats-"
-                "officedocument.wordprocessingml.document"
-            ),
-            width="stretch",
-        )
+        if docx_bytes is not None:
+            st.download_button(
+                label="Download DOCX",
+                data=docx_bytes,
+                file_name=docx_filename,
+                mime=(
+                    "application/vnd.openxmlformats-"
+                    "officedocument.wordprocessingml.document"
+                ),
+                width="stretch",
+            )
+        else:
+            st.warning(
+                "DOCX export is temporarily unavailable."
+            )
 
+            if docx_error:
+                with st.expander(
+                    "DOCX export details"
+                ):
+                    st.write(docx_error)
 
 def display_research_figure() -> None:
     """

@@ -563,10 +563,12 @@ def _add_research_figure(
             report.evidence,
             dpi=180,
         )
-    except FigureGenerationError as exc:
-        raise ReportExportError(
-            f"Research figure generation failed: {exc}"
-        ) from exc
+    except FigureGenerationError:
+        # Some supported analytical intents do not yet have a
+        # deterministic figure implementation. Figure absence must
+        # not prevent an otherwise valid research report from being
+        # exported.
+        return False
     except Exception as exc:
         raise ReportExportError(
             f"Unexpected research figure export failure: {exc}"
