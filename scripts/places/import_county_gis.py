@@ -27,6 +27,18 @@ def parse_ci(series: pd.Series) -> tuple[pd.Series, pd.Series]:
     return lower, upper
 
 
+def resolve_column(
+    columns: list[str],
+    expected: str,
+) -> str | None:
+    column_map = {
+        column.lower(): column
+        for column in columns
+    }
+
+    return column_map.get(expected.lower())
+
+
 def import_county_gis(
     db_path: Path,
     csv_path: Path,
@@ -112,27 +124,37 @@ def import_county_gis(
         for meta in metadata.itertuples(index=False):
             measure_id = meta.measure_id
 
-            crude_prev_col = f"{measure_id}_CrudePrev"
-            crude_ci_col = f"{measure_id}_Crude95CI"
-            adj_prev_col = f"{measure_id}_AdjPrev"
-            adj_ci_col = f"{measure_id}_Adj95CI"
-
-            required_measure_columns = {
-                crude_prev_col,
-                crude_ci_col,
-                adj_prev_col,
-                adj_ci_col,
+            expected_columns = {
+                "crude_prev": f"{measure_id}_CrudePrev",
+                "crude_ci": f"{measure_id}_Crude95CI",
+                "adj_prev": f"{measure_id}_AdjPrev",
+                "adj_ci": f"{measure_id}_Adj95CI",
             }
 
-            missing_measure_columns = (
-                required_measure_columns - set(df.columns)
-            )
+            resolved_columns = {
+                key: resolve_column(
+                    list(df.columns),
+                    expected,
+                )
+                for key, expected in expected_columns.items()
+            }
+
+            missing_measure_columns = [
+                expected_columns[key]
+                for key, resolved in resolved_columns.items()
+                if resolved is None
+            ]
 
             if missing_measure_columns:
                 raise ValueError(
                     f"{measure_id}: missing columns "
                     f"{sorted(missing_measure_columns)}"
                 )
+
+            crude_prev_col = resolved_columns["crude_prev"]
+            crude_ci_col = resolved_columns["crude_ci"]
+            adj_prev_col = resolved_columns["adj_prev"]
+            adj_ci_col = resolved_columns["adj_ci"]
 
             crude_lower, crude_upper = parse_ci(
                 df[crude_ci_col]
