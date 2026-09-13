@@ -1707,3 +1707,150 @@ def get_places_ihme_rurality_comparison(
     summary["dataset"] = "CDC PLACES + IHME + USDA RUCC 2023"
 
     return summary
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_positive_deviance(
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+    rurality_group: str | None = None,
+    limit: int = 25,
+) -> pd.DataFrame:
+    """
+    Identify counties with lower or higher IHME YLL burden than expected
+    from CDC PLACES prevalence using a simple linear relationship.
+
+    residual = observed_yll_rate - expected_yll_rate
+
+    Negative residual:
+        lower YLL burden than expected given prevalence.
+
+    Positive residual:
+        higher YLL burden than expected given prevalence.
+
+    This is descriptive and does not imply causation.
+    """
+
+    if not isinstance(limit, int) or limit < 1:
+        raise ValueError("limit must be a positive integer.")
+
+    df = get_places_ihme_county_context(
+        places_measure_id=places_measure_id,
+        places_measurement_year=places_measurement_year,
+        ihme_cause_id=ihme_cause_id,
+        ihme_year=ihme_year,
+    ).copy()
+
+    df = df[
+        df["places_age_adjusted_prevalence"].notna()
+        & df["ihme_yll_rate"].notna()
+    ].copy()
+
+    def classify_rucc(code):
+        if pd.isna(code):
+            return None
+
+        code = int(code)
+
+        if 1 <= code <= 3:
+            return "Metro"
+        if code in (4, 6, 8):
+            return "Nonmetro adjacent"
+        if code in (5, 7, 9):
+            return "Nonmetro not adjacent"
+
+        return None
+
+    df["rurality_group"] = df["rucc_code"].map(classify_rucc)
+
+    if rurality_group is not None:
+        allowed = {
+            "Metro",
+            "Nonmetro adjacent",
+            "Nonmetro not adjacent",
+        }
+
+        if rurality_group not in allowed:
+            raise ValueError(
+                "rurality_group must be one of: "
+                "Metro, Nonmetro adjacent, "
+                "Nonmetro not adjacent."
+            )
+
+        df = df[df["rurality_group"] == rurality_group].copy()
+
+    if len(df) < 2:
+        raise ValueError(
+            "At least two matched counties are required."
+        )
+
+    x = df["places_age_adjusted_prevalence"].astype(float)
+    y = df["ihme_yll_rate"].astype(float)
+
+    x_mean = x.mean()
+    y_mean = y.mean()
+
+    denominator = ((x - x_mean) ** 2).sum()
+
+    if denominator == 0:
+        raise ValueError(
+            "PLACES prevalence has no variation."
+        )
+
+    slope = (
+        ((x - x_mean) * (y - y_mean)).sum()
+        / denominator
+    )
+
+    intercept = y_mean - slope * x_mean
+
+    df["expected_ihme_yll_rate"] = (
+        intercept
+        + slope * df["places_age_adjusted_prevalence"]
+    )
+
+    df["yll_residual"] = (
+        df["ihme_yll_rate"]
+        - df["expected_ihme_yll_rate"]
+    )
+
+    df["deviance_direction"] = df["yll_residual"].apply(
+        lambda value: (
+            "Lower burden than expected"
+            if value < 0
+            else "Higher burden than expected"
+        )
+    )
+
+    df["model_slope"] = slope
+    df["model_intercept"] = intercept
+
+    columns = [
+        "fips",
+        "ihme_location_name",
+        "places_measure_id",
+        "places_measurement_year",
+        "places_age_adjusted_prevalence",
+        "ihme_cause_id",
+        "ihme_cause_name",
+        "ihme_year",
+        "ihme_yll_rate",
+        "expected_ihme_yll_rate",
+        "yll_residual",
+        "deviance_direction",
+        "rucc_code",
+        "rurality_group",
+        "model_slope",
+        "model_intercept",
+    ]
+
+    return (
+        df[columns]
+        .sort_values(
+            "yll_residual",
+            ascending=True,
+        )
+        .head(limit)
+        .reset_index(drop=True)
+    )
