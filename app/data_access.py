@@ -1041,3 +1041,133 @@ def get_places_county_measure_trend(
             normalized_measure_id,
         ],
     )
+
+
+@st.cache_data(show_spinner=False)
+def get_places_county_measure_ranking(
+    measure_id: str,
+    measurement_year: int,
+    limit: int | None = None,
+) -> pd.DataFrame:
+    """
+    Rank counties nationally for one CDC PLACES measure and
+    underlying BRFSS measurement year.
+
+    Rankings use age-adjusted prevalence. Release year is retained
+    separately for provenance.
+    """
+    normalized_measure_id = str(measure_id).strip().upper()
+
+    if not normalized_measure_id:
+        raise ValueError(
+            "measure_id cannot be blank"
+        )
+
+    year_value = int(measurement_year)
+
+    if year_value < 2017 or year_value > 2023:
+        raise ValueError(
+            "measurement_year must be between 2017 and 2023"
+        )
+
+    sql = """
+        WITH eligible AS (
+            SELECT
+                e.geoid AS fips,
+                e.geography_name,
+                e.state_abbr,
+                e.state_name,
+                e.release_year,
+                e.measurement_year,
+                e.measure_id,
+                m.canonical_name AS measure_name,
+                m.category,
+                m.frequency,
+                m.unit,
+                e.crude_prevalence,
+                e.crude_ci_lower,
+                e.crude_ci_upper,
+                e.age_adjusted_prevalence,
+                e.age_adjusted_ci_lower,
+                e.age_adjusted_ci_upper,
+                e.carry_forward,
+                e.missing_reason
+
+            FROM places.estimates AS e
+
+            INNER JOIN places.measures AS m
+                ON e.measure_id = m.measure_id
+
+            WHERE e.geography_level = 'county'
+              AND e.measure_id = ?
+              AND e.measurement_year = ?
+              AND e.age_adjusted_prevalence IS NOT NULL
+        ),
+
+        ranked AS (
+            SELECT
+                ROW_NUMBER() OVER (
+                    ORDER BY
+                        age_adjusted_prevalence DESC,
+                        geography_name,
+                        fips
+                ) AS national_rank,
+
+                COUNT(*) OVER ()
+                    AS counties_with_estimate,
+
+                *
+
+            FROM eligible
+        )
+
+        SELECT
+            national_rank,
+            counties_with_estimate,
+            fips,
+            geography_name,
+            state_abbr,
+            state_name,
+            release_year,
+            measurement_year,
+            measure_id,
+            measure_name,
+            category,
+            frequency,
+            unit,
+            crude_prevalence,
+            crude_ci_lower,
+            crude_ci_upper,
+            age_adjusted_prevalence,
+            age_adjusted_ci_lower,
+            age_adjusted_ci_upper,
+            carry_forward,
+            missing_reason,
+            'CDC PLACES' AS dataset
+
+        FROM ranked
+
+        ORDER BY national_rank
+    """
+
+    dataframe = run_query(
+        sql,
+        [
+            normalized_measure_id,
+            year_value,
+        ],
+    )
+
+    if limit is not None:
+        limit_value = int(limit)
+
+        if limit_value <= 0:
+            raise ValueError(
+                "limit must be greater than zero."
+            )
+
+        dataframe = dataframe.head(
+            limit_value
+        ).copy()
+
+    return dataframe
