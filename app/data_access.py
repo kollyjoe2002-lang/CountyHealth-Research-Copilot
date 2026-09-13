@@ -1468,3 +1468,149 @@ def get_places_rucc_adjacent_comparison(
         sql,
         [measure_id, measurement_year],
     )
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_county_context(
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+) -> pd.DataFrame:
+    """
+    Build a county-level analytical bridge between CDC PLACES
+    prevalence estimates and IHME YLL rates.
+
+    PLACES observations use canonical measurement-year rows only
+    (carry_forward = FALSE).
+
+    IHME observations use:
+      - YLLs (measure_id = 4)
+      - Rate (metric_id = 3)
+      - Both sexes (sex_id = 3)
+      - Total race (race_id = 1)
+      - Age 20+, age standardized (age_group_id = 38)
+
+    The two evidence systems remain explicitly labeled and are joined
+    only by county FIPS. No causal relationship is implied.
+    """
+
+    places_measure_id = str(places_measure_id).strip().upper()
+
+    if not places_measure_id:
+        raise ValueError("places_measure_id must not be blank.")
+
+    if not isinstance(places_measurement_year, int):
+        raise ValueError(
+            "places_measurement_year must be an integer."
+        )
+
+    if not isinstance(ihme_cause_id, int):
+        raise ValueError("ihme_cause_id must be an integer.")
+
+    if not isinstance(ihme_year, int):
+        raise ValueError("ihme_year must be an integer.")
+
+    if places_measurement_year < 2017 or places_measurement_year > 2023:
+        raise ValueError(
+            "places_measurement_year must be between 2017 and 2023."
+        )
+
+    if ihme_year < 2000 or ihme_year > 2019:
+        raise ValueError(
+            "ihme_year must be between 2000 and 2019."
+        )
+
+    sql = """
+        WITH places_context AS (
+            SELECT
+                e.geoid AS fips,
+                e.measure_id AS places_measure_id,
+                m.canonical_name AS places_measure_name,
+                m.unit AS places_unit,
+                e.measurement_year AS places_measurement_year,
+                e.age_adjusted_prevalence AS places_age_adjusted_prevalence,
+                e.age_adjusted_ci_lower AS places_lower,
+                e.age_adjusted_ci_upper AS places_upper
+            FROM places.estimates AS e
+            INNER JOIN places.measures AS m
+                ON m.measure_id = e.measure_id
+            WHERE e.geography_level = 'county'
+              AND e.measure_id = ?
+              AND e.measurement_year = ?
+              AND e.carry_forward = FALSE
+              AND e.age_adjusted_prevalence IS NOT NULL
+        ),
+        ihme_context AS (
+            SELECT
+                fips,
+                location_name AS ihme_location_name,
+                cause_id AS ihme_cause_id,
+                cause_name AS ihme_cause_name,
+                year AS ihme_year,
+                measure_name AS ihme_measure_name,
+                metric_name AS ihme_metric_name,
+                age_name AS ihme_age_name,
+                sex_name AS ihme_sex_name,
+                race_name AS ihme_race_name,
+                val AS ihme_yll_rate,
+                lower AS ihme_lower,
+                upper AS ihme_upper
+            FROM ihme.burden
+            WHERE cause_id = ?
+              AND year = ?
+              AND measure_id = 4
+              AND metric_id = 3
+              AND sex_id = 3
+              AND race_id = 1
+              AND age_group_id = 38
+              AND val IS NOT NULL
+        )
+        SELECT
+            p.fips,
+
+            p.places_measure_id,
+            p.places_measure_name,
+            p.places_unit,
+            p.places_measurement_year,
+            p.places_age_adjusted_prevalence,
+            p.places_lower,
+            p.places_upper,
+
+            i.ihme_location_name,
+            i.ihme_cause_id,
+            i.ihme_cause_name,
+            i.ihme_year,
+            i.ihme_measure_name,
+            i.ihme_metric_name,
+            i.ihme_age_name,
+            i.ihme_sex_name,
+            i.ihme_race_name,
+            i.ihme_yll_rate,
+            i.ihme_lower,
+            i.ihme_upper,
+
+            r.rucc_code,
+            r.metro_status,
+            r.adjacency_status,
+
+            'CDC PLACES' AS places_source,
+            'IHME' AS ihme_source,
+            'USDA RUCC 2023' AS rurality_source
+
+        FROM places_context AS p
+        INNER JOIN ihme_context AS i
+            ON i.fips = p.fips
+        LEFT JOIN geography.rucc_2023 AS r
+            ON r.fips = p.fips
+        ORDER BY p.fips
+    """
+
+    return run_query(
+        sql,
+        [
+            places_measure_id,
+            places_measurement_year,
+            ihme_cause_id,
+            ihme_year,
+        ],
+    )
