@@ -1854,3 +1854,126 @@ def get_places_ihme_positive_deviance(
         .head(limit)
         .reset_index(drop=True)
     )
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_model_diagnostics(
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+    rurality_group: str | None = None,
+) -> pd.DataFrame:
+    """
+    Return diagnostics for the simple linear relationship between
+    CDC PLACES prevalence and IHME YLL rate.
+
+    This is descriptive only and does not imply causation.
+    """
+
+    df = get_places_ihme_county_context(
+        places_measure_id=places_measure_id,
+        places_measurement_year=places_measurement_year,
+        ihme_cause_id=ihme_cause_id,
+        ihme_year=ihme_year,
+    ).copy()
+
+    df = df[
+        df["places_age_adjusted_prevalence"].notna()
+        & df["ihme_yll_rate"].notna()
+    ].copy()
+
+    def classify_rucc(code):
+        if pd.isna(code):
+            return None
+
+        code = int(code)
+
+        if 1 <= code <= 3:
+            return "Metro"
+        if code in (4, 6, 8):
+            return "Nonmetro adjacent"
+        if code in (5, 7, 9):
+            return "Nonmetro not adjacent"
+
+        return None
+
+    df["rurality_group"] = df["rucc_code"].map(classify_rucc)
+
+    if rurality_group is not None:
+        allowed = {
+            "Metro",
+            "Nonmetro adjacent",
+            "Nonmetro not adjacent",
+        }
+
+        if rurality_group not in allowed:
+            raise ValueError(
+                "rurality_group must be one of: "
+                "Metro, Nonmetro adjacent, "
+                "Nonmetro not adjacent."
+            )
+
+        df = df[df["rurality_group"] == rurality_group].copy()
+
+    if len(df) < 2:
+        raise ValueError(
+            "At least two matched counties are required."
+        )
+
+    x = df["places_age_adjusted_prevalence"].astype(float)
+    y = df["ihme_yll_rate"].astype(float)
+
+    x_mean = x.mean()
+    y_mean = y.mean()
+
+    denominator = ((x - x_mean) ** 2).sum()
+
+    if denominator == 0:
+        raise ValueError(
+            "PLACES prevalence has no variation."
+        )
+
+    slope = (
+        ((x - x_mean) * (y - y_mean)).sum()
+        / denominator
+    )
+
+    intercept = y_mean - slope * x_mean
+
+    expected = intercept + slope * x
+    residuals = y - expected
+
+    sse = (residuals ** 2).sum()
+    sst = ((y - y_mean) ** 2).sum()
+
+    r_squared = (
+        1.0 - (sse / sst)
+        if sst != 0
+        else float("nan")
+    )
+
+    rmse = (sse / len(df)) ** 0.5
+    pearson_r = x.corr(y)
+
+    result = pd.DataFrame(
+        [
+            {
+                "places_measure_id": places_measure_id.upper(),
+                "places_measurement_year": places_measurement_year,
+                "ihme_cause_id": ihme_cause_id,
+                "ihme_year": ihme_year,
+                "rurality_group": rurality_group or "All matched counties",
+                "counties": len(df),
+                "pearson_r": pearson_r,
+                "r_squared": r_squared,
+                "rmse": rmse,
+                "residual_mean": residuals.mean(),
+                "residual_sd": residuals.std(ddof=1),
+                "model_slope": slope,
+                "model_intercept": intercept,
+                "dataset": "CDC PLACES + IHME + USDA RUCC 2023",
+            }
+        ]
+    )
+
+    return result
