@@ -122,6 +122,40 @@ def main() -> None:
         "2023 OBESITY ranking unexpectedly contains Kentucky or Pennsylvania.",
     )
 
+    dental = get_places_county_measure_ranking(
+        "DENTAL",
+        2022,
+    )
+
+    assert_true(
+        len(dental) == 3144,
+        f"Expected 3,144 canonical DENTAL 2022 counties; got {len(dental)}.",
+    )
+
+    assert_true(
+        dental["carry_forward"].eq(False).all(),
+        "Canonical DENTAL 2022 ranking contains carry-forward rows.",
+    )
+
+    assert_true(
+        dental["measurement_year"].eq(2022).all(),
+        "DENTAL 2022 ranking contains unexpected measurement years.",
+    )
+
+    assert_true(
+        dental["release_year"].eq(2024).all(),
+        "Canonical DENTAL 2022 observations should come from the 2024 release.",
+    )
+
+    assert_true(
+        dental["fips"].nunique() == len(dental),
+        "DENTAL 2022 ranking contains duplicate counties.",
+    )
+
+    print()
+    print("Carry-forward deduplication: PASS")
+    print(f"DENTAL 2022 counties : {len(dental):,}")
+    print("Canonical release     : 2024")
     print("PLACES county measure ranking validation: PASS")
     print("Measure               : OBESITY")
     print("Measurement year      : 2023")

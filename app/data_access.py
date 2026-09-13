@@ -1098,10 +1098,11 @@ def get_places_county_measure_ranking(
             INNER JOIN places.measures AS m
                 ON e.measure_id = m.measure_id
 
-            WHERE e.geography_level = 'county'
-              AND e.measure_id = ?
-              AND e.measurement_year = ?
-              AND e.age_adjusted_prevalence IS NOT NULL
+WHERE e.geography_level = 'county'
+AND e.measure_id = ?
+  AND e.measurement_year = ?
+  AND e.carry_forward = FALSE
+  AND e.age_adjusted_prevalence IS NOT NULL
         ),
 
         ranked AS (
