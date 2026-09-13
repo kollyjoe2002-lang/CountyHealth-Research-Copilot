@@ -1366,3 +1366,105 @@ def get_places_rucc_comparison(
         sql,
         [measure_id, measurement_year],
     )
+
+@st.cache_data(show_spinner=False)
+def get_places_rucc_adjacent_comparison(
+    measure_id: str,
+    measurement_year: int,
+) -> pd.DataFrame:
+    """
+    Compare canonical CDC PLACES county estimates across three
+    rurality groups:
+
+    - Metro
+    - Nonmetro adjacent to metro
+    - Nonmetro not adjacent to metro
+
+    Carry-forward PLACES rows are excluded so measurement-year
+    analyses use only canonical observations.
+    """
+
+    measure_id = str(measure_id).strip().upper()
+
+    if not measure_id:
+        raise ValueError("measure_id must not be blank.")
+
+    if not isinstance(measurement_year, int):
+        raise ValueError("measurement_year must be an integer.")
+
+    if measurement_year < 2017 or measurement_year > 2023:
+        raise ValueError(
+            "measurement_year must be between 2017 and 2023."
+        )
+
+    sql = """
+        WITH canonical AS (
+            SELECT
+                e.geoid AS fips,
+                e.measurement_year,
+                e.measure_id,
+                m.canonical_name AS measure_name,
+                m.category,
+                m.unit,
+                e.age_adjusted_prevalence
+            FROM places.estimates AS e
+            INNER JOIN places.measures AS m
+                ON m.measure_id = e.measure_id
+            WHERE e.geography_level = 'county'
+              AND e.measure_id = ?
+              AND e.measurement_year = ?
+              AND e.carry_forward = FALSE
+              AND e.age_adjusted_prevalence IS NOT NULL
+        ),
+        classified AS (
+            SELECT
+                c.*,
+                CASE
+                    WHEN r.rucc_code BETWEEN 1 AND 3
+                        THEN 'Metro'
+                    WHEN r.rucc_code IN (4, 6, 8)
+                        THEN 'Nonmetro adjacent'
+                    WHEN r.rucc_code IN (5, 7, 9)
+                        THEN 'Nonmetro not adjacent'
+                    ELSE NULL
+                END AS rurality_group
+            FROM canonical AS c
+            INNER JOIN geography.rucc_2023 AS r
+                ON r.fips = c.fips
+            WHERE r.rucc_code BETWEEN 1 AND 9
+        )
+        SELECT
+            measure_id,
+            measure_name,
+            category,
+            unit,
+            measurement_year,
+            rurality_group,
+            COUNT(*) AS counties_with_estimate,
+            AVG(age_adjusted_prevalence) AS mean_prevalence,
+            MEDIAN(age_adjusted_prevalence) AS median_prevalence,
+            MIN(age_adjusted_prevalence) AS minimum_prevalence,
+            MAX(age_adjusted_prevalence) AS maximum_prevalence,
+            'CDC PLACES + USDA RUCC 2023' AS dataset
+        FROM classified
+        WHERE rurality_group IS NOT NULL
+        GROUP BY
+            measure_id,
+            measure_name,
+            category,
+            unit,
+            measurement_year,
+            rurality_group
+        ORDER BY
+            CASE rurality_group
+                WHEN 'Metro' THEN 1
+                WHEN 'Nonmetro adjacent' THEN 2
+                WHEN 'Nonmetro not adjacent' THEN 3
+                ELSE 4
+            END
+    """
+
+    return run_query(
+        sql,
+        [measure_id, measurement_year],
+    )
