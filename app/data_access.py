@@ -1172,3 +1172,104 @@ AND e.measure_id = ?
         ).copy()
 
     return dataframe
+
+@st.cache_data(show_spinner=False)
+def get_places_rural_metro_comparison(
+    measure_id: str,
+    measurement_year: int,
+) -> pd.DataFrame:
+    """
+    Compare canonical county-level CDC PLACES estimates between
+    Metro and Nonmetro counties using USDA RUCC 2023.
+
+    Analytical time is the underlying BRFSS measurement year.
+    Carry-forward PLACES rows are excluded so each county contributes
+    at most one canonical observation for the requested measurement year.
+
+    Counties without a RUCC classification are excluded from the grouped
+    comparison rather than assigned a rurality category.
+    """
+
+    measure_id = str(measure_id).strip().upper()
+
+    if not measure_id:
+        raise ValueError("measure_id must not be blank.")
+
+    if not isinstance(measurement_year, int):
+        raise ValueError("measurement_year must be an integer.")
+
+    if measurement_year < 2017 or measurement_year > 2023:
+        raise ValueError(
+            "measurement_year must be between 2017 and 2023."
+        )
+
+    sql = """
+        WITH canonical AS (
+            SELECT
+                e.geoid AS fips,
+                e.geography_name,
+                e.state_abbr,
+                e.state_name,
+                e.release_year,
+                e.measurement_year,
+                e.measure_id,
+                m.canonical_name AS measure_name,
+                m.category,
+                m.unit,
+                e.age_adjusted_prevalence,
+                e.age_adjusted_ci_lower,
+                e.age_adjusted_ci_upper
+            FROM places.estimates AS e
+            INNER JOIN places.measures AS m
+                ON m.measure_id = e.measure_id
+            WHERE e.geography_level = 'county'
+              AND e.measure_id = ?
+              AND e.measurement_year = ?
+              AND e.carry_forward = FALSE
+              AND e.age_adjusted_prevalence IS NOT NULL
+        ),
+        classified AS (
+            SELECT
+                c.*,
+                r.rucc_code,
+                r.metro_status,
+                r.adjacency_status
+            FROM canonical AS c
+            INNER JOIN geography.rucc_2023 AS r
+                ON r.fips = c.fips
+            WHERE r.rucc_code IS NOT NULL
+              AND r.metro_status IN ('Metro', 'Nonmetro')
+        )
+        SELECT
+            measure_id,
+            measure_name,
+            category,
+            unit,
+            measurement_year,
+            metro_status,
+            COUNT(*) AS counties_with_estimate,
+            AVG(age_adjusted_prevalence) AS mean_prevalence,
+            MEDIAN(age_adjusted_prevalence) AS median_prevalence,
+            MIN(age_adjusted_prevalence) AS minimum_prevalence,
+            MAX(age_adjusted_prevalence) AS maximum_prevalence,
+            'CDC PLACES + USDA RUCC 2023' AS dataset
+        FROM classified
+        GROUP BY
+            measure_id,
+            measure_name,
+            category,
+            unit,
+            measurement_year,
+            metro_status
+        ORDER BY
+            CASE metro_status
+                WHEN 'Metro' THEN 1
+                WHEN 'Nonmetro' THEN 2
+                ELSE 3
+            END
+    """
+
+    return run_query(
+        sql,
+        [measure_id, measurement_year],
+    )
