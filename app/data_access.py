@@ -1468,7 +1468,7 @@ def get_places_rucc_adjacent_comparison(
         sql,
         [measure_id, measurement_year],
     )
-       
+
 @st.cache_data(show_spinner=False)
 def get_places_ihme_county_context(
     places_measure_id: str,
@@ -1716,6 +1716,7 @@ def get_places_ihme_positive_deviance(
     ihme_year: int,
     rurality_group: str | None = None,
     limit: int = 25,
+    exclude_high_leverage: bool = False,
 ) -> pd.DataFrame:
     """
     Identify counties with lower or higher IHME YLL burden than expected
@@ -1814,6 +1815,16 @@ def get_places_ihme_positive_deviance(
         df["ihme_yll_rate"]
         - df["expected_ihme_yll_rate"]
     )
+    residual_sd = df["yll_residual"].std(ddof=1)
+
+    if residual_sd == 0:
+        raise ValueError(
+            "Residual variation is zero; standardized residuals cannot be computed."
+        )
+
+    df["standardized_residual"] = (
+        df["yll_residual"] / residual_sd
+    )
 
     df["deviance_direction"] = df["yll_residual"].apply(
         lambda value: (
@@ -1823,9 +1834,62 @@ def get_places_ihme_positive_deviance(
         )
     )
 
+    n = len(df)
+    parameter_count = 2
+
+    df["leverage"] = (
+        (1.0 / n)
+        + (
+            (x - x_mean) ** 2
+            / denominator
+        )
+    )
+
+    leverage_threshold = (
+        2.0 * parameter_count / n
+    )
+
+    df["leverage_threshold"] = leverage_threshold
+
+    df["high_leverage"] = (
+        df["leverage"] > leverage_threshold
+    )
+
+    df["candidate_interpretation"] = df.apply(
+        lambda row: (
+            "Lower burden than expected; high-leverage caution"
+            if (
+                row["yll_residual"] < 0
+                and row["high_leverage"]
+            )
+            else (
+                "Lower burden than expected"
+                if row["yll_residual"] < 0
+                else (
+                    "Higher burden than expected; high-leverage caution"
+                    if row["high_leverage"]
+                    else "Higher burden than expected"
+                )
+            )
+        ),
+        axis=1,
+    )
+
     df["model_slope"] = slope
     df["model_intercept"] = intercept
 
+    df["robust_positive_deviance_candidate"] = (
+        (df["yll_residual"] < 0)
+        & (~df["high_leverage"])
+    )
+
+    df["strong_positive_deviance_candidate"] = (
+        df["robust_positive_deviance_candidate"]
+        & (df["standardized_residual"] <= -2.0)
+    )
+
+    if exclude_high_leverage:
+        df = df[~df["high_leverage"]].copy()
     columns = [
         "fips",
         "ihme_location_name",
@@ -1838,6 +1902,13 @@ def get_places_ihme_positive_deviance(
         "ihme_yll_rate",
         "expected_ihme_yll_rate",
         "yll_residual",
+        "standardized_residual",
+        "leverage",
+        "leverage_threshold",
+        "high_leverage",
+        "robust_positive_deviance_candidate",
+        "strong_positive_deviance_candidate",
+        "candidate_interpretation",
         "deviance_direction",
         "rucc_code",
         "rurality_group",

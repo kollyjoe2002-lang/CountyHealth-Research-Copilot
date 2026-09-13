@@ -16,6 +16,64 @@ def main():
         limit=15,
     )
 
+
+    conservative = get_places_ihme_positive_deviance(
+        places_measure_id="DIABETES",
+        places_measurement_year=2019,
+        ihme_cause_id=976,
+        ihme_year=2019,
+        rurality_group="Nonmetro adjacent",
+        limit=15,
+        exclude_high_leverage=True,
+    )
+
+    assert_true(
+        len(conservative) == 15,
+        "Expected 15 conservative candidates.",
+    )
+
+    assert_true(
+        conservative["high_leverage"].eq(False).all(),
+        "Conservative ranking must exclude high-leverage counties.",
+    )
+
+    assert_true(
+        conservative[
+            "robust_positive_deviance_candidate"
+        ].eq(True).all(),
+        "Expected all conservative rows to be robust candidates.",
+    )
+
+    assert_true(
+        conservative.iloc[0]["fips"] == "02290",
+        "Unexpected leading conservative candidate.",
+    )
+
+    strong_count = int(
+        conservative[
+            "strong_positive_deviance_candidate"
+        ].sum()
+    )
+
+    assert_true(
+        strong_count == 5,
+        f"Expected 5 strong conservative candidates; got {strong_count}.",
+    )
+
+    strong = conservative[
+        conservative["strong_positive_deviance_candidate"]
+    ]
+
+    assert_true(
+        (strong["standardized_residual"] <= -2.0).all(),
+        "Strong candidates must be at or below -2 standardized residuals.",
+    )
+
+    assert_true(
+        strong["high_leverage"].eq(False).all(),
+        "Strong candidates must not be high leverage.",
+    )
+
     assert_true(
         len(df) == 15,
         f"Expected 15 rows; got {len(df)}.",
@@ -86,6 +144,17 @@ def main():
                 "yll_residual",
             ]
         ].to_string(index=False)
+    )
+    print()
+    print("Conservative ranking validation: PASS")
+    print("High-leverage rows excluded: 0")
+    print(
+        "Leading conservative candidate: "
+        f"{conservative.iloc[0]['ihme_location_name']}"
+    )
+    print(
+        "Strong candidates (<= -2 SD): "
+        f"{strong_count}"
     )
 
 
