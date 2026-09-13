@@ -893,3 +893,75 @@ def get_county_ranking(
         ).copy()
 
     return dataframe
+
+
+@st.cache_data(show_spinner=False)
+def get_places_county_snapshot(
+    fips: str,
+    release_year: int,
+) -> pd.DataFrame:
+    """
+    Return all CDC PLACES measures for one county and release.
+
+    PLACES release year and underlying BRFSS measurement year are
+    preserved separately. Estimates remain distinct from IHME burden
+    metrics.
+    """
+    if len(str(fips)) != 5 or not str(fips).isdigit():
+        raise ValueError(
+            "fips must be a five-digit county FIPS code"
+        )
+
+    if release_year < 2020 or release_year > 2025:
+        raise ValueError(
+            "release_year must be between 2020 and 2025"
+        )
+
+    return run_query(
+        """
+        SELECT
+            e.geoid AS fips,
+            e.geography_name,
+            e.state_abbr,
+            e.state_name,
+            e.release_year,
+            e.measurement_year,
+            e.measure_id,
+            m.canonical_name AS measure_name,
+            m.category,
+            m.frequency,
+            m.unit,
+            v.measure_definition,
+            v.data_source,
+            e.total_population,
+            e.total_pop_18plus,
+            e.crude_prevalence,
+            e.crude_ci_lower,
+            e.crude_ci_upper,
+            e.age_adjusted_prevalence,
+            e.age_adjusted_ci_lower,
+            e.age_adjusted_ci_upper,
+            e.carry_forward,
+            e.missing_reason,
+            'CDC PLACES' AS dataset
+
+        FROM places.estimates AS e
+
+        INNER JOIN places.measures AS m
+            ON e.measure_id = m.measure_id
+
+        INNER JOIN places.measure_versions AS v
+            ON e.release_year = v.release_year
+           AND e.measure_id = v.measure_id
+
+        WHERE e.geography_level = 'county'
+          AND e.geoid = ?
+          AND e.release_year = ?
+
+        ORDER BY e.measure_id
+        """,
+        [
+            str(fips),
+            int(release_year),
+        ],
+    )
