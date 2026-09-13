@@ -965,3 +965,79 @@ def get_places_county_snapshot(
             int(release_year),
         ],
     )
+
+
+@st.cache_data(show_spinner=False)
+def get_places_county_measure_trend(
+    fips: str,
+    measure_id: str,
+) -> pd.DataFrame:
+    """
+    Return the PLACES history for one county and measure.
+
+    The analytical time axis is the underlying BRFSS measurement year.
+    Release year is retained separately for provenance. Carry-forward
+    observations remain visible and are not treated as independent new
+    measurement years.
+    """
+    normalized_fips = str(fips).strip()
+    normalized_measure_id = str(measure_id).strip().upper()
+
+    if len(normalized_fips) != 5 or not normalized_fips.isdigit():
+        raise ValueError(
+            "fips must be a five-digit county FIPS code"
+        )
+
+    if not normalized_measure_id:
+        raise ValueError(
+            "measure_id cannot be blank"
+        )
+
+    return run_query(
+        """
+        SELECT
+            e.geoid AS fips,
+            e.geography_name,
+            e.state_abbr,
+            e.state_name,
+            e.release_year,
+            e.measurement_year,
+            e.measure_id,
+            m.canonical_name AS measure_name,
+            m.category,
+            m.frequency,
+            m.unit,
+            v.measure_definition,
+            v.data_source,
+            e.crude_prevalence,
+            e.crude_ci_lower,
+            e.crude_ci_upper,
+            e.age_adjusted_prevalence,
+            e.age_adjusted_ci_lower,
+            e.age_adjusted_ci_upper,
+            e.carry_forward,
+            e.missing_reason,
+            'CDC PLACES' AS dataset
+
+        FROM places.estimates AS e
+
+        INNER JOIN places.measures AS m
+            ON e.measure_id = m.measure_id
+
+        INNER JOIN places.measure_versions AS v
+            ON e.release_year = v.release_year
+           AND e.measure_id = v.measure_id
+
+        WHERE e.geography_level = 'county'
+          AND e.geoid = ?
+          AND e.measure_id = ?
+
+        ORDER BY
+            e.measurement_year,
+            e.release_year
+        """,
+        [
+            normalized_fips,
+            normalized_measure_id,
+        ],
+    )
