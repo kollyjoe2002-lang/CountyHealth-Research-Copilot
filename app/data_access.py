@@ -1468,7 +1468,7 @@ def get_places_rucc_adjacent_comparison(
         sql,
         [measure_id, measurement_year],
     )
-
+       
 @st.cache_data(show_spinner=False)
 def get_places_ihme_county_context(
     places_measure_id: str,
