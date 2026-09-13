@@ -1614,3 +1614,96 @@ def get_places_ihme_county_context(
             ihme_year,
         ],
     )
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_rurality_comparison(
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+) -> pd.DataFrame:
+    """
+    Summarize matched CDC PLACES prevalence and IHME YLL-rate evidence
+    across three USDA RUCC rurality groups:
+
+    - Metro
+    - Nonmetro adjacent
+    - Nonmetro not adjacent
+
+    The underlying county-level bridge preserves the two evidence systems
+    separately and uses canonical PLACES measurement-year observations.
+    """
+
+    df = get_places_ihme_county_context(
+        places_measure_id=places_measure_id,
+        places_measurement_year=places_measurement_year,
+        ihme_cause_id=ihme_cause_id,
+        ihme_year=ihme_year,
+    )
+
+    df = df[df["rucc_code"].notna()].copy()
+
+    def classify_rucc(code):
+        code = int(code)
+
+        if 1 <= code <= 3:
+            return "Metro"
+        if code in (4, 6, 8):
+            return "Nonmetro adjacent"
+        if code in (5, 7, 9):
+            return "Nonmetro not adjacent"
+
+        return None
+
+    df["rurality_group"] = df["rucc_code"].map(classify_rucc)
+
+    df = df[df["rurality_group"].notna()].copy()
+
+    summary = (
+        df.groupby(
+            "rurality_group",
+            observed=True,
+        )
+        .agg(
+            counties=("fips", "nunique"),
+            mean_places_prevalence=(
+                "places_age_adjusted_prevalence",
+                "mean",
+            ),
+            median_places_prevalence=(
+                "places_age_adjusted_prevalence",
+                "median",
+            ),
+            mean_ihme_yll_rate=(
+                "ihme_yll_rate",
+                "mean",
+            ),
+            median_ihme_yll_rate=(
+                "ihme_yll_rate",
+                "median",
+            ),
+        )
+        .reset_index()
+    )
+
+    order = {
+        "Metro": 1,
+        "Nonmetro adjacent": 2,
+        "Nonmetro not adjacent": 3,
+    }
+
+    summary["_order"] = summary["rurality_group"].map(order)
+
+    summary = (
+        summary.sort_values("_order")
+        .drop(columns="_order")
+        .reset_index(drop=True)
+    )
+
+    summary["places_measure_id"] = places_measure_id.upper()
+    summary["places_measurement_year"] = places_measurement_year
+    summary["ihme_cause_id"] = ihme_cause_id
+    summary["ihme_year"] = ihme_year
+    summary["dataset"] = "CDC PLACES + IHME + USDA RUCC 2023"
+
+    return summary
