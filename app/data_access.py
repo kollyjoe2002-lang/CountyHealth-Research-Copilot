@@ -1854,6 +1854,24 @@ def get_places_ihme_positive_deviance(
     df["high_leverage"] = (
         df["leverage"] > leverage_threshold
     )
+    residual_sse = (df["yll_residual"] ** 2).sum()
+    residual_df = n - parameter_count
+
+    if residual_df <= 0:
+        raise ValueError(
+            "Insufficient residual degrees of freedom."
+        )
+
+    residual_mse = residual_sse / residual_df
+    residual_rmse = residual_mse ** 0.5
+
+    df["studentized_residual"] = (
+        df["yll_residual"]
+        / (
+            residual_rmse
+            * (1.0 - df["leverage"]) ** 0.5
+        )
+    )
 
     df["candidate_interpretation"] = df.apply(
         lambda row: (
@@ -1885,7 +1903,7 @@ def get_places_ihme_positive_deviance(
 
     df["strong_positive_deviance_candidate"] = (
         df["robust_positive_deviance_candidate"]
-        & (df["standardized_residual"] <= -2.0)
+        & (df["studentized_residual"] <= -2.0)
     )
 
     if exclude_high_leverage:
@@ -1903,6 +1921,7 @@ def get_places_ihme_positive_deviance(
         "expected_ihme_yll_rate",
         "yll_residual",
         "standardized_residual",
+        "studentized_residual",
         "leverage",
         "leverage_threshold",
         "high_leverage",

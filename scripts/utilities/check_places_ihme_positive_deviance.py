@@ -65,8 +65,8 @@ def main():
     ]
 
     assert_true(
-        (strong["standardized_residual"] <= -2.0).all(),
-        "Strong candidates must be at or below -2 standardized residuals.",
+        (strong["studentized_residual"] <= -2.0).all(),
+        "Strong candidates must be at or below -2 studentized residuals.",
     )
 
     assert_true(
@@ -153,7 +153,7 @@ def main():
         f"{conservative.iloc[0]['ihme_location_name']}"
     )
     print(
-        "Strong candidates (<= -2 SD): "
+        "Strong candidates (studentized <= -2): "
         f"{strong_count}"
     )
 
