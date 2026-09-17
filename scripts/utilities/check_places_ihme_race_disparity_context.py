@@ -69,6 +69,57 @@ def main():
         .sum()
     )
 
+    overlap = int(
+        df["intervals_overlap"].sum()
+    )
+
+    non_overlap = int(
+        (~df["intervals_overlap"]).sum()
+    )
+
+    clear_black = int(
+        df["clear_disparity_direction"]
+        .eq("Black clearly higher")
+        .sum()
+    )
+
+    clear_white = int(
+        df["clear_disparity_direction"]
+        .eq("White clearly higher")
+        .sum()
+    )
+
+    interval_overlap = int(
+        df["clear_disparity_direction"]
+        .eq("Intervals overlap")
+        .sum()
+    )
+
+    assert_true(
+        overlap == 1415,
+        f"Expected 1,415 overlapping intervals; got {overlap}.",
+    )
+
+    assert_true(
+        non_overlap == 74,
+        f"Expected 74 non-overlapping intervals; got {non_overlap}.",
+    )
+
+    assert_true(
+        clear_black == 74,
+        f"Expected 74 Black-clearly-higher counties; got {clear_black}.",
+    )
+
+    assert_true(
+        clear_white == 0,
+        f"Expected 0 White-clearly-higher counties; got {clear_white}.",
+    )
+
+    assert_true(
+        interval_overlap == 1415,
+        f"Expected 1,415 overlap classifications; got {interval_overlap}.",
+    )
+
     assert_true(
         black_higher == 1468,
         f"Expected 1,468 Black-higher counties; got {black_higher}.",

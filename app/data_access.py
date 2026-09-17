@@ -2216,6 +2216,36 @@ def get_places_ihme_race_disparity_context(
             )
         )
     )
+    result["intervals_overlap"] = ~(
+        (
+            result["black_yll_lower"]
+            > result["white_yll_upper"]
+        )
+        |
+        (
+            result["white_yll_lower"]
+            > result["black_yll_upper"]
+        )
+    )
+
+    result["clear_disparity_direction"] = result.apply(
+        lambda row: (
+            "Black clearly higher"
+            if (
+                row["black_yll_lower"]
+                > row["white_yll_upper"]
+            )
+            else (
+                "White clearly higher"
+                if (
+                    row["white_yll_lower"]
+                    > row["black_yll_upper"]
+                )
+                else "Intervals overlap"
+            )
+        ),
+        axis=1,
+    )
 
     result["ihme_cause_id"] = ihme_cause_id
     result["ihme_year"] = ihme_year
