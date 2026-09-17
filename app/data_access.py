@@ -2076,200 +2076,54 @@ def get_places_ihme_race_disparity_context(
     ihme_year: int,
 ) -> pd.DataFrame:
     """
-    Combine canonical CDC PLACES county prevalence with the existing
-    deterministic IHME Black-White YLL disparity ranking.
-
-    IHME comparison:
-      Group A = Non-Latino, Black (race_id = 4)
-      Group B = Non-Latino, White (race_id = 5)
-
-    Signed disparity:
-      Black YLL rate - White YLL rate
-
-    Positive values indicate higher Black YLL burden.
-    Negative values indicate higher White YLL burden.
-
-    PLACES and IHME remain separate evidence systems.
+    Convenience wrapper for Black-White IHME disparity context.
     """
 
-    places_measure_id = str(
-        places_measure_id
-    ).strip().upper()
-
-    if not places_measure_id:
-        raise ValueError(
-            "places_measure_id must not be blank."
-        )
-
-    if not isinstance(
-        places_measurement_year,
-        int,
-    ):
-        raise ValueError(
-            "places_measurement_year must be an integer."
-        )
-
-    if not isinstance(ihme_cause_id, int):
-        raise ValueError(
-            "ihme_cause_id must be an integer."
-        )
-
-    if not isinstance(ihme_year, int):
-        raise ValueError(
-            "ihme_year must be an integer."
-        )
-
-    disparity = get_county_disparity_ranking(
-        cause_id=ihme_cause_id,
-        year=ihme_year,
+    result = get_places_ihme_demographic_disparity_context(
         dimension="Race / ethnicity",
         group_a_id=4,
         group_b_id=5,
+        places_measure_id=places_measure_id,
+        places_measurement_year=places_measurement_year,
+        ihme_cause_id=ihme_cause_id,
+        ihme_year=ihme_year,
     ).copy()
 
-    disparity = disparity.rename(
+    result = result.rename(
         columns={
-            "location_name": "ihme_location_name",
-            "group_a_value": "black_yll_rate",
-            "group_a_lower": "black_yll_lower",
-            "group_a_upper": "black_yll_upper",
-            "group_b_value": "white_yll_rate",
-            "group_b_lower": "white_yll_lower",
-            "group_b_upper": "white_yll_upper",
-            "absolute_gap": "black_white_yll_gap",
-            "absolute_gap_magnitude": (
-                "black_white_yll_gap_magnitude"
-            ),
-            "relative_gap_percent": (
-                "black_white_relative_gap_percent"
-            ),
+            "group_a_yll_rate": "black_yll_rate",
+            "group_a_yll_lower": "black_yll_lower",
+            "group_a_yll_upper": "black_yll_upper",
+            "group_b_yll_rate": "white_yll_rate",
+            "group_b_yll_lower": "white_yll_lower",
+            "group_b_yll_upper": "white_yll_upper",
+            "signed_yll_gap": "black_white_yll_gap",
+            "yll_gap_magnitude": "black_white_yll_gap_magnitude",
+            "relative_gap_percent": "black_white_relative_gap_percent",
         }
     )
 
-    places_sql = """
-        SELECT
-            e.geoid AS fips,
-            e.geography_name AS places_location_name,
-            e.measure_id AS places_measure_id,
-            m.canonical_name AS places_measure_name,
-            e.measurement_year AS places_measurement_year,
-            e.age_adjusted_prevalence
-                AS places_age_adjusted_prevalence,
-            e.age_adjusted_ci_lower AS places_ci_lower,
-            e.age_adjusted_ci_upper AS places_ci_upper
-        FROM places.estimates AS e
-        INNER JOIN places.measures AS m
-            ON m.measure_id = e.measure_id
-        WHERE e.geography_level = 'county'
-          AND e.measure_id = ?
-          AND e.measurement_year = ?
-          AND e.carry_forward = FALSE
-          AND e.age_adjusted_prevalence IS NOT NULL
-    """
-
-    places = run_query(
-        places_sql,
-        [
-            places_measure_id,
-            places_measurement_year,
-        ],
-    )
-
-    result = disparity.merge(
-        places,
-        on="fips",
-        how="inner",
-        validate="one_to_one",
-    )
-
-    rucc_sql = """
-        SELECT
-            fips,
-            rucc_code,
-            metro_status,
-            adjacency_status
-        FROM geography.rucc_2023
-    """
-
-    rucc = run_query(
-        rucc_sql,
-        [],
-    )
-
-    result = result.merge(
-        rucc,
-        on="fips",
-        how="left",
-        validate="one_to_one",
-    )
-
     result["disparity_direction"] = result[
-        "black_white_yll_gap"
-    ].apply(
-        lambda value: (
-            "Black higher"
-            if value > 0
-            else (
-                "White higher"
-                if value < 0
-                else "Equal"
-            )
-        )
-    )
-    result["intervals_overlap"] = ~(
-        (
-            result["black_yll_lower"]
-            > result["white_yll_upper"]
-        )
-        |
-        (
-            result["white_yll_lower"]
-            > result["black_yll_upper"]
-        )
+        "disparity_direction"
+    ].replace(
+        {
+            "Non-Latino, Black higher": "Black higher",
+            "Non-Latino, White higher": "White higher",
+        }
     )
 
-    result["clear_disparity_direction"] = result.apply(
-        lambda row: (
-            "Black clearly higher"
-            if (
-                row["black_yll_lower"]
-                > row["white_yll_upper"]
-            )
-            else (
-                "White clearly higher"
-                if (
-                    row["white_yll_lower"]
-                    > row["black_yll_upper"]
-                )
-                else "Intervals overlap"
-            )
-        ),
-        axis=1,
+    result["clear_disparity_direction"] = result[
+        "clear_disparity_direction"
+    ].replace(
+        {
+            "Non-Latino, Black clearly higher":
+                "Black clearly higher",
+            "Non-Latino, White clearly higher":
+                "White clearly higher",
+        }
     )
 
-    result["ihme_cause_id"] = ihme_cause_id
-    result["ihme_year"] = ihme_year
-    result["ihme_dimension"] = "Race / ethnicity"
-    result["group_a"] = "Non-Latino, Black"
-    result["group_b"] = "Non-Latino, White"
-
-    result["dataset"] = (
-        "CDC PLACES + IHME + USDA RUCC 2023"
-    )
-
-    return (
-        result.sort_values(
-            [
-                "black_white_yll_gap",
-                "fips",
-            ],
-            ascending=[
-                False,
-                True,
-            ],
-        )
-        .reset_index(drop=True)
-    )
+    return result
 
 @st.cache_data(show_spinner=False)
 def get_places_ihme_race_disparity_ranking(
@@ -2351,18 +2205,54 @@ def get_places_ihme_sex_disparity_context(
     ihme_year: int,
 ) -> pd.DataFrame:
     """
+    Convenience wrapper for Male-Female IHME disparity context.
+    """
+
+    result = get_places_ihme_demographic_disparity_context(
+        dimension="Sex",
+        group_a_id=1,
+        group_b_id=2,
+        places_measure_id=places_measure_id,
+        places_measurement_year=places_measurement_year,
+        ihme_cause_id=ihme_cause_id,
+        ihme_year=ihme_year,
+    ).copy()
+
+    return result.rename(
+        columns={
+            "group_a_yll_rate": "male_yll_rate",
+            "group_a_yll_lower": "male_yll_lower",
+            "group_a_yll_upper": "male_yll_upper",
+            "group_b_yll_rate": "female_yll_rate",
+            "group_b_yll_lower": "female_yll_lower",
+            "group_b_yll_upper": "female_yll_upper",
+            "signed_yll_gap": "male_female_yll_gap",
+            "yll_gap_magnitude": "male_female_yll_gap_magnitude",
+            "relative_gap_percent": "male_female_relative_gap_percent",
+        }
+    )
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_demographic_disparity_context(
+    dimension: str,
+    group_a_id: int,
+    group_b_id: int,
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+) -> pd.DataFrame:
+    """
     Combine canonical CDC PLACES county prevalence with the existing
-    deterministic IHME Male-Female YLL disparity ranking.
+    deterministic IHME demographic disparity ranking.
 
-    IHME comparison:
-      Group A = Male (sex_id = 1)
-      Group B = Female (sex_id = 2)
+    The signed disparity is always:
 
-    Signed disparity:
-      Male YLL rate - Female YLL rate
+        Group A YLL rate - Group B YLL rate
 
-    Positive values indicate higher Male YLL burden.
-    Negative values indicate higher Female YLL burden.
+    PLACES is used as contextual county-level prevalence evidence.
+    IHME provides the demographic YLL disparity.
+    USDA RUCC provides rurality context.
     """
 
     places_measure_id = str(
@@ -2374,29 +2264,68 @@ def get_places_ihme_sex_disparity_context(
             "places_measure_id must not be blank."
         )
 
+    if dimension not in DISPARITY_DIMENSIONS:
+        raise ValueError(
+            f"Unsupported disparity dimension: {dimension}"
+        )
+
+    if int(group_a_id) == int(group_b_id):
+        raise ValueError(
+            "Group A and Group B must be different."
+        )
+
     disparity = get_county_disparity_ranking(
         cause_id=ihme_cause_id,
         year=ihme_year,
-        dimension="Sex",
-        group_a_id=1,
-        group_b_id=2,
+        dimension=dimension,
+        group_a_id=group_a_id,
+        group_b_id=group_b_id,
     ).copy()
+
+    groups = get_disparity_groups(
+        dimension
+    ).copy()
+
+    group_lookup = {
+        int(row["group_id"]): row["group_name"]
+        for _, row in groups.iterrows()
+    }
+
+    group_a_name = group_lookup.get(
+        int(group_a_id)
+    )
+
+    group_b_name = group_lookup.get(
+        int(group_b_id)
+    )
+
+    if group_a_name is None:
+        raise ValueError(
+            f"Unknown Group A id {group_a_id} "
+            f"for dimension {dimension}."
+        )
+
+    if group_b_name is None:
+        raise ValueError(
+            f"Unknown Group B id {group_b_id} "
+            f"for dimension {dimension}."
+        )
 
     disparity = disparity.rename(
         columns={
             "location_name": "ihme_location_name",
-            "group_a_value": "male_yll_rate",
-            "group_a_lower": "male_yll_lower",
-            "group_a_upper": "male_yll_upper",
-            "group_b_value": "female_yll_rate",
-            "group_b_lower": "female_yll_lower",
-            "group_b_upper": "female_yll_upper",
-            "absolute_gap": "male_female_yll_gap",
+            "group_a_value": "group_a_yll_rate",
+            "group_a_lower": "group_a_yll_lower",
+            "group_a_upper": "group_a_yll_upper",
+            "group_b_value": "group_b_yll_rate",
+            "group_b_lower": "group_b_yll_lower",
+            "group_b_upper": "group_b_yll_upper",
+            "absolute_gap": "signed_yll_gap",
             "absolute_gap_magnitude": (
-                "male_female_yll_gap_magnitude"
+                "yll_gap_magnitude"
             ),
             "relative_gap_percent": (
-                "male_female_relative_gap_percent"
+                "relative_gap_percent"
             ),
         }
     )
@@ -2457,13 +2386,13 @@ def get_places_ihme_sex_disparity_context(
     )
 
     result["disparity_direction"] = result[
-        "male_female_yll_gap"
+        "signed_yll_gap"
     ].apply(
         lambda value: (
-            "Male higher"
+            f"{group_a_name} higher"
             if value > 0
             else (
-                "Female higher"
+                f"{group_b_name} higher"
                 if value < 0
                 else "Equal"
             )
@@ -2472,28 +2401,28 @@ def get_places_ihme_sex_disparity_context(
 
     result["intervals_overlap"] = ~(
         (
-            result["male_yll_lower"]
-            > result["female_yll_upper"]
+            result["group_a_yll_lower"]
+            > result["group_b_yll_upper"]
         )
         |
         (
-            result["female_yll_lower"]
-            > result["male_yll_upper"]
+            result["group_b_yll_lower"]
+            > result["group_a_yll_upper"]
         )
     )
 
     result["clear_disparity_direction"] = result.apply(
         lambda row: (
-            "Male clearly higher"
+            f"{group_a_name} clearly higher"
             if (
-                row["male_yll_lower"]
-                > row["female_yll_upper"]
+                row["group_a_yll_lower"]
+                > row["group_b_yll_upper"]
             )
             else (
-                "Female clearly higher"
+                f"{group_b_name} clearly higher"
                 if (
-                    row["female_yll_lower"]
-                    > row["male_yll_upper"]
+                    row["group_b_yll_lower"]
+                    > row["group_a_yll_upper"]
                 )
                 else "Intervals overlap"
             )
@@ -2503,9 +2432,11 @@ def get_places_ihme_sex_disparity_context(
 
     result["ihme_cause_id"] = ihme_cause_id
     result["ihme_year"] = ihme_year
-    result["ihme_dimension"] = "Sex"
-    result["group_a"] = "Male"
-    result["group_b"] = "Female"
+    result["ihme_dimension"] = dimension
+    result["group_a_id"] = int(group_a_id)
+    result["group_b_id"] = int(group_b_id)
+    result["group_a"] = group_a_name
+    result["group_b"] = group_b_name
     result["dataset"] = (
         "CDC PLACES + IHME + USDA RUCC 2023"
     )
@@ -2513,7 +2444,7 @@ def get_places_ihme_sex_disparity_context(
     return (
         result.sort_values(
             [
-                "male_female_yll_gap",
+                "signed_yll_gap",
                 "fips",
             ],
             ascending=[
