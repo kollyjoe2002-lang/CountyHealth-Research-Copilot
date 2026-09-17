@@ -2270,3 +2270,75 @@ def get_places_ihme_race_disparity_context(
         )
         .reset_index(drop=True)
     )
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_race_disparity_ranking(
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+    minimum_places_prevalence: float | None = None,
+    require_nonoverlap: bool = False,
+    limit: int = 25,
+) -> pd.DataFrame:
+    """
+    Rank counties by Black-White IHME YLL disparity while using
+    CDC PLACES prevalence as contextual filtering evidence.
+
+    The signed disparity is:
+
+        Black YLL rate - White YLL rate
+
+    Positive values indicate higher Black YLL burden.
+
+    PLACES prevalence is not treated as an IHME disparity measure.
+    It is used only to restrict or contextualize the county universe.
+    """
+
+    if not isinstance(limit, int) or limit < 1:
+        raise ValueError(
+            "limit must be a positive integer."
+        )
+
+    if minimum_places_prevalence is not None:
+        minimum_places_prevalence = float(
+            minimum_places_prevalence
+        )
+
+        if minimum_places_prevalence < 0:
+            raise ValueError(
+                "minimum_places_prevalence must be non-negative."
+            )
+
+    df = get_places_ihme_race_disparity_context(
+        places_measure_id=places_measure_id,
+        places_measurement_year=places_measurement_year,
+        ihme_cause_id=ihme_cause_id,
+        ihme_year=ihme_year,
+    ).copy()
+
+    if minimum_places_prevalence is not None:
+        df = df[
+            df["places_age_adjusted_prevalence"]
+            >= minimum_places_prevalence
+        ].copy()
+
+    if require_nonoverlap:
+        df = df[
+            df["intervals_overlap"].eq(False)
+        ].copy()
+
+    return (
+        df.sort_values(
+            [
+                "black_white_yll_gap",
+                "fips",
+            ],
+            ascending=[
+                False,
+                True,
+            ],
+        )
+        .head(limit)
+        .reset_index(drop=True)
+    )
