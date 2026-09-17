@@ -2342,3 +2342,184 @@ def get_places_ihme_race_disparity_ranking(
         .head(limit)
         .reset_index(drop=True)
     )
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_sex_disparity_context(
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+) -> pd.DataFrame:
+    """
+    Combine canonical CDC PLACES county prevalence with the existing
+    deterministic IHME Male-Female YLL disparity ranking.
+
+    IHME comparison:
+      Group A = Male (sex_id = 1)
+      Group B = Female (sex_id = 2)
+
+    Signed disparity:
+      Male YLL rate - Female YLL rate
+
+    Positive values indicate higher Male YLL burden.
+    Negative values indicate higher Female YLL burden.
+    """
+
+    places_measure_id = str(
+        places_measure_id
+    ).strip().upper()
+
+    if not places_measure_id:
+        raise ValueError(
+            "places_measure_id must not be blank."
+        )
+
+    disparity = get_county_disparity_ranking(
+        cause_id=ihme_cause_id,
+        year=ihme_year,
+        dimension="Sex",
+        group_a_id=1,
+        group_b_id=2,
+    ).copy()
+
+    disparity = disparity.rename(
+        columns={
+            "location_name": "ihme_location_name",
+            "group_a_value": "male_yll_rate",
+            "group_a_lower": "male_yll_lower",
+            "group_a_upper": "male_yll_upper",
+            "group_b_value": "female_yll_rate",
+            "group_b_lower": "female_yll_lower",
+            "group_b_upper": "female_yll_upper",
+            "absolute_gap": "male_female_yll_gap",
+            "absolute_gap_magnitude": (
+                "male_female_yll_gap_magnitude"
+            ),
+            "relative_gap_percent": (
+                "male_female_relative_gap_percent"
+            ),
+        }
+    )
+
+    places_sql = """
+        SELECT
+            e.geoid AS fips,
+            e.geography_name AS places_location_name,
+            e.measure_id AS places_measure_id,
+            m.canonical_name AS places_measure_name,
+            e.measurement_year AS places_measurement_year,
+            e.age_adjusted_prevalence
+                AS places_age_adjusted_prevalence,
+            e.age_adjusted_ci_lower AS places_ci_lower,
+            e.age_adjusted_ci_upper AS places_ci_upper
+        FROM places.estimates AS e
+        INNER JOIN places.measures AS m
+            ON m.measure_id = e.measure_id
+        WHERE e.geography_level = 'county'
+          AND e.measure_id = ?
+          AND e.measurement_year = ?
+          AND e.carry_forward = FALSE
+          AND e.age_adjusted_prevalence IS NOT NULL
+    """
+
+    places = run_query(
+        places_sql,
+        [
+            places_measure_id,
+            places_measurement_year,
+        ],
+    )
+
+    result = disparity.merge(
+        places,
+        on="fips",
+        how="inner",
+        validate="one_to_one",
+    )
+
+    rucc = run_query(
+        """
+        SELECT
+            fips,
+            rucc_code,
+            metro_status,
+            adjacency_status
+        FROM geography.rucc_2023
+        """,
+        [],
+    )
+
+    result = result.merge(
+        rucc,
+        on="fips",
+        how="left",
+        validate="one_to_one",
+    )
+
+    result["disparity_direction"] = result[
+        "male_female_yll_gap"
+    ].apply(
+        lambda value: (
+            "Male higher"
+            if value > 0
+            else (
+                "Female higher"
+                if value < 0
+                else "Equal"
+            )
+        )
+    )
+
+    result["intervals_overlap"] = ~(
+        (
+            result["male_yll_lower"]
+            > result["female_yll_upper"]
+        )
+        |
+        (
+            result["female_yll_lower"]
+            > result["male_yll_upper"]
+        )
+    )
+
+    result["clear_disparity_direction"] = result.apply(
+        lambda row: (
+            "Male clearly higher"
+            if (
+                row["male_yll_lower"]
+                > row["female_yll_upper"]
+            )
+            else (
+                "Female clearly higher"
+                if (
+                    row["female_yll_lower"]
+                    > row["male_yll_upper"]
+                )
+                else "Intervals overlap"
+            )
+        ),
+        axis=1,
+    )
+
+    result["ihme_cause_id"] = ihme_cause_id
+    result["ihme_year"] = ihme_year
+    result["ihme_dimension"] = "Sex"
+    result["group_a"] = "Male"
+    result["group_b"] = "Female"
+    result["dataset"] = (
+        "CDC PLACES + IHME + USDA RUCC 2023"
+    )
+
+    return (
+        result.sort_values(
+            [
+                "male_female_yll_gap",
+                "fips",
+            ],
+            ascending=[
+                False,
+                True,
+            ],
+        )
+        .reset_index(drop=True)
+    )
