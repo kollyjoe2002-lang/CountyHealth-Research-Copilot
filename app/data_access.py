@@ -2454,3 +2454,68 @@ def get_places_ihme_demographic_disparity_context(
         )
         .reset_index(drop=True)
     )
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_age_disparity_context(
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+) -> pd.DataFrame:
+    """
+    Convenience wrapper for ages 60-64 versus ages 80-84
+    IHME YLL disparity context.
+
+    Signed disparity:
+        Ages 60-64 YLL rate - Ages 80-84 YLL rate
+    """
+
+    result = get_places_ihme_demographic_disparity_context(
+        dimension="Age group",
+        group_a_id=17,
+        group_b_id=30,
+        places_measure_id=places_measure_id,
+        places_measurement_year=places_measurement_year,
+        ihme_cause_id=ihme_cause_id,
+        ihme_year=ihme_year,
+    ).copy()
+
+    result = result.rename(
+        columns={
+            "group_a_yll_rate": "age_60_64_yll_rate",
+            "group_a_yll_lower": "age_60_64_yll_lower",
+            "group_a_yll_upper": "age_60_64_yll_upper",
+            "group_b_yll_rate": "age_80_84_yll_rate",
+            "group_b_yll_lower": "age_80_84_yll_lower",
+            "group_b_yll_upper": "age_80_84_yll_upper",
+            "signed_yll_gap": "age_60_64_minus_80_84_yll_gap",
+            "yll_gap_magnitude": (
+                "age_60_64_minus_80_84_yll_gap_magnitude"
+            ),
+            "relative_gap_percent": (
+                "age_60_64_minus_80_84_relative_gap_percent"
+            ),
+        }
+    )
+
+    result["disparity_direction"] = result[
+        "disparity_direction"
+    ].replace(
+        {
+            "60 to 64 higher": "Ages 60-64 higher",
+            "80 to 84 higher": "Ages 80-84 higher",
+        }
+    )
+
+    result["clear_disparity_direction"] = result[
+        "clear_disparity_direction"
+    ].replace(
+        {
+            "60 to 64 clearly higher":
+                "Ages 60-64 clearly higher",
+            "80 to 84 clearly higher":
+                "Ages 80-84 clearly higher",
+        }
+    )
+
+    return result
