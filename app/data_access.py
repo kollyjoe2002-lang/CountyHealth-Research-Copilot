@@ -2832,3 +2832,235 @@ def get_places_ihme_county_trend_context(
         )
         .reset_index(drop=True)
     )
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_demographic_disparity_trend_context(
+    fips: str,
+    dimension: str,
+    group_a_id: int,
+    group_b_id: int,
+    places_measure_id: str,
+    ihme_cause_id: int,
+) -> pd.DataFrame:
+    """
+    Combine canonical CDC PLACES county prevalence history with an
+    IHME demographic disparity trend.
+
+    PLACES:
+      - time axis = BRFSS measurement year
+      - canonical observations exclude carry-forward rows
+      - values remain age-adjusted prevalence percentages
+
+    IHME:
+      - time axis = IHME year
+      - disparity = Group A YLL rate - Group B YLL rate
+
+    No composite measure is created.
+    """
+
+    normalized_fips = str(fips).strip().zfill(5)
+    normalized_measure_id = str(
+        places_measure_id
+    ).strip().upper()
+
+    if len(normalized_fips) != 5 or not normalized_fips.isdigit():
+        raise ValueError(
+            "fips must be a five-digit county FIPS code"
+        )
+
+    if not normalized_measure_id:
+        raise ValueError(
+            "places_measure_id must not be blank"
+        )
+
+    if dimension not in DISPARITY_DIMENSIONS:
+        raise ValueError(
+            f"Unsupported disparity dimension: {dimension}"
+        )
+
+    if int(group_a_id) == int(group_b_id):
+        raise ValueError(
+            "Group A and Group B must be different."
+        )
+
+    groups = get_disparity_groups(
+        dimension
+    ).copy()
+
+    group_lookup = {
+        int(row["group_id"]): row["group_name"]
+        for _, row in groups.iterrows()
+    }
+
+    group_a_name = group_lookup.get(
+        int(group_a_id)
+    )
+
+    group_b_name = group_lookup.get(
+        int(group_b_id)
+    )
+
+    if group_a_name is None:
+        raise ValueError(
+            f"Unknown Group A id {group_a_id} "
+            f"for dimension {dimension}."
+        )
+
+    if group_b_name is None:
+        raise ValueError(
+            f"Unknown Group B id {group_b_id} "
+            f"for dimension {dimension}."
+        )
+
+    places = get_places_county_measure_trend(
+        fips=normalized_fips,
+        measure_id=normalized_measure_id,
+    ).copy()
+
+    places = places[
+        places["carry_forward"].eq(False)
+    ].copy()
+
+    places = places.rename(
+        columns={
+            "measurement_year": "analysis_year",
+            "geography_name": "places_location_name",
+            "measure_id": "places_measure_id",
+            "measure_name": "places_measure_name",
+            "unit": "places_unit",
+            "release_year": "places_release_year",
+            "age_adjusted_prevalence":
+                "places_age_adjusted_prevalence",
+            "age_adjusted_ci_lower":
+                "places_ci_lower",
+            "age_adjusted_ci_upper":
+                "places_ci_upper",
+        }
+    )
+
+    places = places[
+        [
+            "analysis_year",
+            "fips",
+            "places_location_name",
+            "places_measure_id",
+            "places_measure_name",
+            "places_unit",
+            "places_release_year",
+            "places_age_adjusted_prevalence",
+            "places_ci_lower",
+            "places_ci_upper",
+        ]
+    ]
+
+    disparity = get_county_disparity_trend(
+        fips=normalized_fips,
+        cause_id=ihme_cause_id,
+        dimension=dimension,
+        group_a_id=group_a_id,
+        group_b_id=group_b_id,
+    ).copy()
+
+    disparity = disparity.rename(
+        columns={
+            "year": "analysis_year",
+            "group_a_value": "group_a_yll_rate",
+            "group_a_lower": "group_a_yll_lower",
+            "group_a_upper": "group_a_yll_upper",
+            "group_b_value": "group_b_yll_rate",
+            "group_b_lower": "group_b_yll_lower",
+            "group_b_upper": "group_b_yll_upper",
+            "absolute_gap": "signed_yll_gap",
+            "absolute_gap_magnitude":
+                "yll_gap_magnitude",
+        }
+    )
+
+    disparity["intervals_overlap"] = ~(
+        (
+            disparity["group_a_yll_lower"]
+            > disparity["group_b_yll_upper"]
+        )
+        |
+        (
+            disparity["group_b_yll_lower"]
+            > disparity["group_a_yll_upper"]
+        )
+    )
+
+    disparity["disparity_direction"] = disparity[
+        "signed_yll_gap"
+    ].apply(
+        lambda value: (
+            f"{group_a_name} higher"
+            if value > 0
+            else (
+                f"{group_b_name} higher"
+                if value < 0
+                else "Equal"
+            )
+        )
+    )
+
+    disparity["clear_disparity_direction"] = disparity.apply(
+        lambda row: (
+            f"{group_a_name} clearly higher"
+            if (
+                row["group_a_yll_lower"]
+                > row["group_b_yll_upper"]
+            )
+            else (
+                f"{group_b_name} clearly higher"
+                if (
+                    row["group_b_yll_lower"]
+                    > row["group_a_yll_upper"]
+                )
+                else "Intervals overlap"
+            )
+        ),
+        axis=1,
+    )
+
+    disparity["ihme_cause_id"] = int(
+        ihme_cause_id
+    )
+
+    disparity["ihme_dimension"] = dimension
+    disparity["group_a_id"] = int(group_a_id)
+    disparity["group_b_id"] = int(group_b_id)
+    disparity["group_a"] = group_a_name
+    disparity["group_b"] = group_b_name
+
+    result = places.merge(
+        disparity,
+        on="analysis_year",
+        how="outer",
+        validate="one_to_one",
+    )
+
+    result["fips"] = result["fips"].fillna(
+        normalized_fips
+    )
+
+    result["places_available"] = result[
+        "places_age_adjusted_prevalence"
+    ].notna()
+
+    result["ihme_available"] = result[
+        "signed_yll_gap"
+    ].notna()
+
+    result["same_year_overlap"] = (
+        result["places_available"]
+        & result["ihme_available"]
+    )
+
+    result["places_dataset"] = "CDC PLACES"
+    result["ihme_dataset"] = "IHME"
+
+    return (
+        result.sort_values(
+            "analysis_year"
+        )
+        .reset_index(drop=True)
+    )
