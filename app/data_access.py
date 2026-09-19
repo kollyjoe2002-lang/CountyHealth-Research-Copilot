@@ -2136,66 +2136,57 @@ def get_places_ihme_race_disparity_ranking(
     limit: int = 25,
 ) -> pd.DataFrame:
     """
-    Rank counties by Black-White IHME YLL disparity while using
-    CDC PLACES prevalence as contextual filtering evidence.
-
-    The signed disparity is:
-
-        Black YLL rate - White YLL rate
-
-    Positive values indicate higher Black YLL burden.
-
-    PLACES prevalence is not treated as an IHME disparity measure.
-    It is used only to restrict or contextualize the county universe.
+    Convenience wrapper for Black-White disparity ranking.
     """
 
-    if not isinstance(limit, int) or limit < 1:
-        raise ValueError(
-            "limit must be a positive integer."
-        )
-
-    if minimum_places_prevalence is not None:
-        minimum_places_prevalence = float(
-            minimum_places_prevalence
-        )
-
-        if minimum_places_prevalence < 0:
-            raise ValueError(
-                "minimum_places_prevalence must be non-negative."
-            )
-
-    df = get_places_ihme_race_disparity_context(
+    result = get_places_ihme_demographic_disparity_ranking(
+        dimension="Race / ethnicity",
+        group_a_id=4,
+        group_b_id=5,
         places_measure_id=places_measure_id,
         places_measurement_year=places_measurement_year,
         ihme_cause_id=ihme_cause_id,
         ihme_year=ihme_year,
+        minimum_places_prevalence=minimum_places_prevalence,
+        require_nonoverlap=require_nonoverlap,
+        limit=limit,
     ).copy()
 
-    if minimum_places_prevalence is not None:
-        df = df[
-            df["places_age_adjusted_prevalence"]
-            >= minimum_places_prevalence
-        ].copy()
-
-    if require_nonoverlap:
-        df = df[
-            df["intervals_overlap"].eq(False)
-        ].copy()
-
-    return (
-        df.sort_values(
-            [
-                "black_white_yll_gap",
-                "fips",
-            ],
-            ascending=[
-                False,
-                True,
-            ],
-        )
-        .head(limit)
-        .reset_index(drop=True)
+    result = result.rename(
+        columns={
+            "group_a_yll_rate": "black_yll_rate",
+            "group_a_yll_lower": "black_yll_lower",
+            "group_a_yll_upper": "black_yll_upper",
+            "group_b_yll_rate": "white_yll_rate",
+            "group_b_yll_lower": "white_yll_lower",
+            "group_b_yll_upper": "white_yll_upper",
+            "signed_yll_gap": "black_white_yll_gap",
+            "yll_gap_magnitude": "black_white_yll_gap_magnitude",
+            "relative_gap_percent": "black_white_relative_gap_percent",
+        }
     )
+
+    result["disparity_direction"] = result[
+        "disparity_direction"
+    ].replace(
+        {
+            "Non-Latino, Black higher": "Black higher",
+            "Non-Latino, White higher": "White higher",
+        }
+    )
+
+    result["clear_disparity_direction"] = result[
+        "clear_disparity_direction"
+    ].replace(
+        {
+            "Non-Latino, Black clearly higher":
+                "Black clearly higher",
+            "Non-Latino, White clearly higher":
+                "White clearly higher",
+        }
+    )
+
+    return result
 
 @st.cache_data(show_spinner=False)
 def get_places_ihme_sex_disparity_context(
@@ -2519,3 +2510,77 @@ def get_places_ihme_age_disparity_context(
     )
 
     return result
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_demographic_disparity_ranking(
+    dimension: str,
+    group_a_id: int,
+    group_b_id: int,
+    places_measure_id: str,
+    places_measurement_year: int,
+    ihme_cause_id: int,
+    ihme_year: int,
+    minimum_places_prevalence: float | None = None,
+    require_nonoverlap: bool = False,
+    limit: int = 25,
+) -> pd.DataFrame:
+    """
+    Rank counties by signed IHME demographic YLL disparity while using
+    CDC PLACES prevalence as contextual filtering evidence.
+
+    Signed disparity:
+        Group A YLL rate - Group B YLL rate
+
+    PLACES prevalence remains a separate contextual measure.
+    """
+
+    if not isinstance(limit, int) or limit < 1:
+        raise ValueError(
+            "limit must be a positive integer."
+        )
+
+    if minimum_places_prevalence is not None:
+        minimum_places_prevalence = float(
+            minimum_places_prevalence
+        )
+
+        if minimum_places_prevalence < 0:
+            raise ValueError(
+                "minimum_places_prevalence must be non-negative."
+            )
+
+    df = get_places_ihme_demographic_disparity_context(
+        dimension=dimension,
+        group_a_id=group_a_id,
+        group_b_id=group_b_id,
+        places_measure_id=places_measure_id,
+        places_measurement_year=places_measurement_year,
+        ihme_cause_id=ihme_cause_id,
+        ihme_year=ihme_year,
+    ).copy()
+
+    if minimum_places_prevalence is not None:
+        df = df[
+            df["places_age_adjusted_prevalence"]
+            >= minimum_places_prevalence
+        ].copy()
+
+    if require_nonoverlap:
+        df = df[
+            df["intervals_overlap"].eq(False)
+        ].copy()
+
+    return (
+        df.sort_values(
+            [
+                "signed_yll_gap",
+                "fips",
+            ],
+            ascending=[
+                False,
+                True,
+            ],
+        )
+        .head(limit)
+        .reset_index(drop=True)
+    )
