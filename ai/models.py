@@ -66,6 +66,7 @@ class SemanticAnalysisRequest:
 
     direction: str | None = None
     geographic_scope: str | None = None
+    evidence_domain: str | None = None
 
     needs_clarification: bool = False
     clarification_question: str | None = None

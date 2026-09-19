@@ -65,6 +65,11 @@ def semantic_request_to_classified(
             "geographic_scope"
         ] = request.geographic_scope
 
+    if request.evidence_domain:
+        entities[
+            "evidence_domain"
+        ] = request.evidence_domain
+
     return ClassifiedQuestion(
         question=request.question,
         intent=request.intent,

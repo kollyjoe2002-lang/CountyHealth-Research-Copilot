@@ -101,6 +101,15 @@ class OpenAISemanticParser:
                 "geographic_scope": {
                     "type": ["string", "null"],
                 },
+                "evidence_domain": {
+                    "type": ["string", "null"],
+                    "enum": [
+                        "IHME",
+                        "PLACES",
+                        "PLACES_IHME",
+                        None,
+                    ],
+                },
                 "needs_clarification": {
                     "type": "boolean",
                 },
@@ -123,6 +132,7 @@ class OpenAISemanticParser:
                 "demographic_groups",
                 "direction",
                 "geographic_scope",
+                "evidence_domain",
                 "needs_clarification",
                 "clarification_question",
                 "explanation",
@@ -177,6 +187,26 @@ unknown:
 Use only when the analytical meaning genuinely cannot be
 mapped to one of the supported intents.
 
+Evidence domain:
+
+Use "IHME" when the user explicitly asks about YLLs,
+years of life lost, disease burden, burden estimates,
+or IHME estimates.
+
+Use "PLACES" when the user explicitly asks about
+CDC PLACES, modeled prevalence, prevalence measures,
+or PLACES indicators.
+
+Use "PLACES_IHME" when the user explicitly asks to
+relate, compare, contextualize, or jointly examine
+PLACES prevalence with IHME disease burden.
+
+Leave evidence_domain null when the user does not indicate
+a specific evidence system.
+
+Do not invent an evidence source merely because one source
+could technically answer the question.
+
 Important distinctions:
 
 "Breast cancer in Milwaukee County, Wisconsin"
@@ -206,9 +236,25 @@ is county_profile.
 "Compare breast cancer between Black and White people"
 is demographic_disparity.
 
+Evidence-domain examples:
+
+"What was the diabetes YLL rate in Milwaukee County?"
+uses evidence_domain = "IHME".
+
+"What was the CDC PLACES diabetes prevalence in Milwaukee County?"
+uses evidence_domain = "PLACES".
+
+"How does CDC PLACES diabetes prevalence relate to IHME diabetes
+burden in Milwaukee County?"
+uses evidence_domain = "PLACES_IHME".
+
+"How has diabetes changed in Milwaukee County?"
+leaves evidence_domain null unless the user explicitly names
+or strongly indicates an evidence system.
+
 Extract what the user actually said. Do not invent a county,
-cause, year, demographic group, direction, or geographic
-scope that was not expressed or strongly implied.
+cause, year, demographic group, direction, geographic scope,
+or evidence domain that was not expressed or strongly implied.
 
 If the question is understandable but important information
 is genuinely missing, set needs_clarification to true and
@@ -315,6 +361,9 @@ geographic_scope with that state.
                 direction=parsed["direction"],
                 geographic_scope=(
                     parsed["geographic_scope"]
+                ),
+                evidence_domain=(
+                    parsed["evidence_domain"]
                 ),
                 needs_clarification=bool(
                     parsed["needs_clarification"]

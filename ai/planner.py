@@ -67,6 +67,9 @@ def build_analysis_plan(
     """
     intent = classified.intent
     entities = classified.extracted_entities
+    evidence_domain = entities.get(
+        "evidence_domain"
+    )
 
     steps: list[AnalysisStep] = []
     assumptions: list[str] = []
@@ -371,9 +374,12 @@ def build_analysis_plan(
         )
 
     return AnalysisPlan(
-        question=classified.question,
-        intent=intent,
-        steps=steps,
-        assumptions=assumptions,
-        unresolved_items=unresolved_items,
-    )
+    question=classified.question,
+    intent=intent,
+    steps=steps,
+    assumptions=assumptions,
+    unresolved_items=unresolved_items,
+    resolved_context={
+        "evidence_domain": evidence_domain,
+    },
+)
