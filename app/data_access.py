@@ -2689,3 +2689,146 @@ def get_places_ihme_age_disparity_ranking(
     )
 
     return result
+
+@st.cache_data(show_spinner=False)
+def get_places_ihme_county_trend_context(
+    fips: str,
+    places_measure_id: str,
+    ihme_cause_id: int,
+) -> pd.DataFrame:
+    """
+    Return county-level CDC PLACES and IHME trends in one
+    year-indexed context table.
+
+    PLACES:
+      - time axis = BRFSS measurement_year
+      - canonical observations use carry_forward = FALSE
+      - values are age-adjusted prevalence percentages
+
+    IHME:
+      - time axis = IHME year
+      - values are YLL rates from the existing county trend API
+
+    The two evidence systems remain analytically distinct.
+    No composite measure is created.
+    """
+
+    normalized_fips = str(fips).strip().zfill(5)
+    normalized_measure_id = str(
+        places_measure_id
+    ).strip().upper()
+
+    if len(normalized_fips) != 5 or not normalized_fips.isdigit():
+        raise ValueError(
+            "fips must be a five-digit county FIPS code"
+        )
+
+    if not normalized_measure_id:
+        raise ValueError(
+            "places_measure_id must not be blank"
+        )
+
+    places = get_places_county_measure_trend(
+        fips=normalized_fips,
+        measure_id=normalized_measure_id,
+    ).copy()
+
+    places = places[
+        places["carry_forward"].eq(False)
+    ].copy()
+
+    places = places.rename(
+        columns={
+            "measurement_year": "analysis_year",
+            "geography_name": "places_location_name",
+            "measure_id": "places_measure_id",
+            "measure_name": "places_measure_name",
+            "unit": "places_unit",
+            "release_year": "places_release_year",
+            "age_adjusted_prevalence": (
+                "places_age_adjusted_prevalence"
+            ),
+            "age_adjusted_ci_lower": "places_ci_lower",
+            "age_adjusted_ci_upper": "places_ci_upper",
+        }
+    )
+
+    places = places[
+        [
+            "analysis_year",
+            "fips",
+            "places_location_name",
+            "places_measure_id",
+            "places_measure_name",
+            "places_unit",
+            "places_release_year",
+            "places_age_adjusted_prevalence",
+            "places_ci_lower",
+            "places_ci_upper",
+        ]
+    ]
+
+    ihme = get_cause_trend(
+        fips=normalized_fips,
+        cause_id=ihme_cause_id,
+    ).copy()
+
+    ihme = ihme.rename(
+        columns={
+            "year": "analysis_year",
+            "cause_id": "ihme_cause_id",
+            "cause_name": "ihme_cause_name",
+            "yll_rate": "ihme_yll_rate",
+            "lower": "ihme_yll_lower",
+            "upper": "ihme_yll_upper",
+            "national_county_rank": "ihme_national_county_rank",
+            "burden_percentile": "ihme_burden_percentile",
+        }
+    )
+
+    ihme = ihme[
+        [
+            "analysis_year",
+            "ihme_cause_id",
+            "ihme_cause_name",
+            "ihme_yll_rate",
+            "ihme_yll_lower",
+            "ihme_yll_upper",
+            "ihme_national_county_rank",
+            "ihme_burden_percentile",
+        ]
+    ]
+
+    result = places.merge(
+        ihme,
+        on="analysis_year",
+        how="outer",
+        validate="one_to_one",
+    )
+
+    result["fips"] = result["fips"].fillna(
+        normalized_fips
+    )
+
+    result["places_available"] = result[
+        "places_age_adjusted_prevalence"
+    ].notna()
+
+    result["ihme_available"] = result[
+        "ihme_yll_rate"
+    ].notna()
+
+    result["same_year_overlap"] = (
+        result["places_available"]
+        & result["ihme_available"]
+    )
+
+    result["places_dataset"] = "CDC PLACES"
+    result["ihme_dataset"] = "IHME"
+
+    return (
+        result.sort_values(
+            "analysis_year"
+        )
+        .reset_index(drop=True)
+    )
