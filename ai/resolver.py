@@ -16,6 +16,7 @@ from app.data_access import (
     get_counties,
     get_disparity_causes,
     get_disparity_groups,
+    run_query,
 )
 
 
@@ -285,6 +286,208 @@ def resolve_cause(
             3,
         ),
     }
+
+
+def resolve_places_measure(
+    question_text: str,
+) -> dict[str, Any]:
+    """
+    Resolve a CDC PLACES measure conservatively.
+
+    Accepted:
+    - exact PLACES measure IDs;
+    - exact canonical measure names;
+    - explicitly approved researcher shorthand.
+
+    Unsupported or ambiguous concepts are rejected rather than
+    fuzzily mapped to a different PLACES measure.
+    """
+    measures = run_query(
+        """
+        SELECT
+            measure_id,
+            canonical_name,
+            category,
+            unit
+        FROM places.measures
+        ORDER BY measure_id
+        """
+    )
+
+    required_columns = {
+        "measure_id",
+        "canonical_name",
+    }
+
+    if measures.empty:
+        raise ResolutionError(
+            "The CDC PLACES measure lookup returned no records."
+        )
+
+    if not required_columns.issubset(
+        measures.columns
+    ):
+        raise ResolutionError(
+            "The CDC PLACES measure lookup is missing required columns."
+        )
+
+    normalized_question = _normalize_text(
+        question_text
+    )
+
+    # Exact PLACES measure ID.
+    for row in measures.itertuples(
+        index=False
+    ):
+        measure_id = str(
+            row.measure_id
+        ).strip()
+
+        if _normalize_text(measure_id) == normalized_question:
+            return {
+                "measure_id": measure_id,
+                "measure_name": str(
+                    row.canonical_name
+                ),
+                "category": getattr(
+                    row,
+                    "category",
+                    None,
+                ),
+                "unit": getattr(
+                    row,
+                    "unit",
+                    None,
+                ),
+                "match_type": "exact_measure_id",
+            }
+
+    # Exact canonical-name matching.
+    canonical_matches = []
+
+    for row in measures.itertuples(
+        index=False
+    ):
+        canonical_name = str(
+            row.canonical_name
+        )
+
+        if (
+            _normalize_text(
+                canonical_name
+            )
+            in normalized_question
+        ):
+            canonical_matches.append(
+                row
+            )
+
+    if canonical_matches:
+        matched = max(
+            canonical_matches,
+            key=lambda row: len(
+                _normalize_text(
+                    str(row.canonical_name)
+                )
+            ),
+        )
+
+        return {
+            "measure_id": str(
+                matched.measure_id
+            ),
+            "measure_name": str(
+                matched.canonical_name
+            ),
+            "category": getattr(
+                matched,
+                "category",
+                None,
+            ),
+            "unit": getattr(
+                matched,
+                "unit",
+                None,
+            ),
+            "match_type": "exact_canonical_name",
+        }
+
+    shorthand_map = {
+        "diabetes": "DIABETES",
+        "diagnosed diabetes": "DIABETES",
+        "obesity": "OBESITY",
+        "stroke": "STROKE",
+        "coronary heart disease": "CHD",
+        "heart disease": "CHD",
+        "high blood pressure": "BPHIGH",
+        "hypertension": "BPHIGH",
+        "high cholesterol": "HIGHCHOL",
+        "chronic kidney disease": "KIDNEY",
+        "kidney disease": "KIDNEY",
+        "copd": "COPD",
+        "asthma": "CASTHMA",
+        "arthritis": "ARTHRITIS",
+        "depression": "DEPRESSION",
+    }
+
+    matched_aliases = [
+        alias
+        for alias in shorthand_map
+        if _normalize_text(
+            alias
+        )
+        in normalized_question
+    ]
+
+    if matched_aliases:
+        alias = max(
+            matched_aliases,
+            key=lambda value: len(
+                _normalize_text(
+                    value
+                )
+            ),
+        )
+
+        measure_id = shorthand_map[
+            alias
+        ]
+
+        matched_rows = measures[
+            measures[
+                "measure_id"
+            ].astype(str).str.upper()
+            == measure_id
+        ]
+
+        if len(matched_rows) != 1:
+            raise ResolutionError(
+                "The approved CDC PLACES shorthand did not resolve "
+                "to exactly one validated measure."
+            )
+
+        row = matched_rows.iloc[0]
+
+        return {
+            "measure_id": str(
+                row["measure_id"]
+            ),
+            "measure_name": str(
+                row["canonical_name"]
+            ),
+            "category": row.get(
+                "category"
+            ),
+            "unit": row.get(
+                "unit"
+            ),
+            "match_type": "approved_shorthand",
+        }
+
+    raise ResolutionError(
+        "The requested concept could not be resolved safely "
+        "to a CDC PLACES measure."
+    )
 
 
 def resolve_county(
@@ -1027,7 +1230,7 @@ def resolve_plan(
                 plan.resolved_context[
                     "year"
                 ] = analysis_year
-                
+
         elif plan.intent == (
             AnalysisIntent.TREND_COMPARISON
         ):
@@ -1038,6 +1241,24 @@ def resolve_plan(
             cause = resolve_cause(
                 cause_resolution_text
             )
+
+            evidence_domain = (
+                plan.resolved_context.get(
+                    "evidence_domain"
+                )
+            )
+
+            places_measure: dict[
+                str,
+                Any,
+            ] | None = None
+
+            if evidence_domain == "PLACES_IHME":
+                places_measure = (
+                    resolve_places_measure(
+                        question_text
+                    )
+                )
 
             first_year: int | None = None
             last_year: int | None = None
@@ -1050,6 +1271,7 @@ def resolve_plan(
                     step.parameters[
                         "cause_id"
                     ] = cause["cause_id"]
+
                     step.parameters[
                         "fips"
                     ] = county["fips"]
@@ -1100,6 +1322,38 @@ def resolve_plan(
                 }
             )
 
+            if places_measure is not None:
+                plan.resolved_context.update(
+                    {
+                        "places_measure_id": (
+                            places_measure[
+                                "measure_id"
+                            ]
+                        ),
+                        "places_measure_name": (
+                            places_measure[
+                                "measure_name"
+                            ]
+                        ),
+                        "places_measure_category": (
+                            places_measure[
+                                "category"
+                            ]
+                        ),
+                        "places_measure_unit": (
+                            places_measure[
+                                "unit"
+                            ]
+                        ),
+                    }
+                )
+
+                plan.assumptions.append(
+                    "Resolved CDC PLACES measure: "
+                    f"{places_measure['measure_name']} "
+                    f"({places_measure['measure_id']})."
+                )
+
             if first_year is not None:
                 plan.resolved_context[
                     "first_year"
@@ -1115,10 +1369,6 @@ def resolve_plan(
                 f"{county['location_name']} "
                 f"({county['fips']})."
             )
-
-        elif plan.intent == (
-            AnalysisIntent.COUNTY_RANKING
-        ):
             cause = resolve_cause(
                 cause_resolution_text
             )
