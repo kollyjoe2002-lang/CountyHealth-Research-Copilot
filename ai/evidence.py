@@ -410,6 +410,244 @@ def _interpret_trend(
     return findings
 
 
+def _interpret_places_ihme_trend(
+    bundle: EvidenceBundle,
+) -> list[str]:
+    """
+    Interpret a county cross-source CDC PLACES and IHME trend.
+
+    PLACES prevalence and IHME YLL rates are interpreted as
+    separate measures. They are never combined into a composite
+    metric and no causal relationship is inferred.
+    """
+    trend = _find_item(
+        bundle,
+        "get_places_ihme_county_trend_context",
+    )
+
+    if trend.empty:
+        return [
+            "No cross-source trend observations were available."
+        ]
+
+    _require_columns(
+        trend,
+        {
+            "analysis_year",
+            "places_age_adjusted_prevalence",
+            "ihme_yll_rate",
+            "places_available",
+            "ihme_available",
+            "same_year_overlap",
+        },
+        evidence_name="CDC PLACES and IHME county trend",
+    )
+
+    trend = trend.copy()
+
+    trend["analysis_year"] = pd.to_numeric(
+        trend["analysis_year"],
+        errors="coerce",
+    )
+
+    trend["places_age_adjusted_prevalence"] = pd.to_numeric(
+        trend["places_age_adjusted_prevalence"],
+        errors="coerce",
+    )
+
+    trend["ihme_yll_rate"] = pd.to_numeric(
+        trend["ihme_yll_rate"],
+        errors="coerce",
+    )
+
+    trend = (
+        trend.dropna(
+            subset=["analysis_year"]
+        )
+        .sort_values("analysis_year")
+        .drop_duplicates(
+            subset=["analysis_year"],
+            keep="last",
+        )
+        .copy()
+    )
+
+    if trend.empty:
+        return [
+            "No usable cross-source trend observations were available."
+        ]
+
+    first_year = int(
+        trend["analysis_year"].min()
+    )
+
+    last_year = int(
+        trend["analysis_year"].max()
+    )
+
+    findings = [
+        (
+            f"The cross-source trend contained "
+            f"{len(trend):,} analysis-year observations "
+            f"from {first_year} through {last_year}."
+        )
+    ]
+
+    places = (
+        trend.dropna(
+            subset=[
+                "places_age_adjusted_prevalence"
+            ]
+        )
+        .sort_values("analysis_year")
+        .copy()
+    )
+
+    if not places.empty:
+        places_first = places.iloc[0]
+        places_last = places.iloc[-1]
+
+        places_first_year = int(
+            places_first["analysis_year"]
+        )
+
+        places_last_year = int(
+            places_last["analysis_year"]
+        )
+
+        places_first_value = float(
+            places_first[
+                "places_age_adjusted_prevalence"
+            ]
+        )
+
+        places_last_value = float(
+            places_last[
+                "places_age_adjusted_prevalence"
+            ]
+        )
+
+        places_change = (
+            places_last_value
+            - places_first_value
+        )
+
+        if places_change > 0:
+            places_direction = "increased"
+        elif places_change < 0:
+            places_direction = "decreased"
+        else:
+            places_direction = "did not change"
+
+        findings.append(
+            (
+                "CDC PLACES age-adjusted prevalence "
+                f"{places_direction} from "
+                f"{_format_number(places_first_value)}% "
+                f"in {places_first_year} to "
+                f"{_format_number(places_last_value)}% "
+                f"in {places_last_year}, an absolute change of "
+                f"{_format_number(places_change)} "
+                "percentage points."
+            )
+        )
+
+    ihme = (
+        trend.dropna(
+            subset=["ihme_yll_rate"]
+        )
+        .sort_values("analysis_year")
+        .copy()
+    )
+
+    if not ihme.empty:
+        ihme_first = ihme.iloc[0]
+        ihme_last = ihme.iloc[-1]
+
+        ihme_first_year = int(
+            ihme_first["analysis_year"]
+        )
+
+        ihme_last_year = int(
+            ihme_last["analysis_year"]
+        )
+
+        ihme_first_value = float(
+            ihme_first["ihme_yll_rate"]
+        )
+
+        ihme_last_value = float(
+            ihme_last["ihme_yll_rate"]
+        )
+
+        ihme_change = (
+            ihme_last_value
+            - ihme_first_value
+        )
+
+        if ihme_change > 0:
+            ihme_direction = "increased"
+        elif ihme_change < 0:
+            ihme_direction = "decreased"
+        else:
+            ihme_direction = "did not change"
+
+        findings.append(
+            (
+                f"The IHME YLL rate {ihme_direction} from "
+                f"{_format_number(ihme_first_value)} "
+                f"in {ihme_first_year} to "
+                f"{_format_number(ihme_last_value)} "
+                f"in {ihme_last_year}, an absolute change of "
+                f"{_format_number(ihme_change)} "
+                "YLL-rate units."
+            )
+        )
+
+    overlap = trend.loc[
+        trend["same_year_overlap"].fillna(False).astype(bool)
+    ].copy()
+
+    if overlap.empty:
+        findings.append(
+            (
+                "CDC PLACES and IHME had no same-year "
+                "observations in the requested period."
+            )
+        )
+    else:
+        overlap_years = sorted(
+            overlap["analysis_year"]
+            .astype(int)
+            .tolist()
+        )
+
+        findings.append(
+            (
+                f"Both sources had estimates for "
+                f"{len(overlap_years):,} same-year "
+                f"observation"
+                f"{'' if len(overlap_years) == 1 else 's'}: "
+                + ", ".join(
+                    str(year)
+                    for year in overlap_years
+                )
+                + "."
+            )
+        )
+
+    findings.append(
+        (
+            "CDC PLACES prevalence and IHME YLL rates represent "
+            "different measures and are reported separately; "
+            "these descriptive trends do not by themselves "
+            "establish a causal relationship."
+        )
+    )
+
+    return findings
+
+
 def _interpret_ranking(
     bundle: EvidenceBundle,
 ) -> list[str]:
@@ -850,6 +1088,14 @@ def interpret_evidence(
             bundle
         )
     if bundle.intent == AnalysisIntent.TREND_COMPARISON:
+        if (
+            bundle.context.get("evidence_domain")
+            == "PLACES_IHME"
+        ):
+            return _interpret_places_ihme_trend(
+                bundle
+            )
+
         return _interpret_trend(
             bundle
         )
@@ -1194,7 +1440,31 @@ def build_evidence_claims(
                 )
 
         elif bundle.intent == AnalysisIntent.TREND_COMPARISON:
-            if "annual observations" in lowered:
+            if "cross-source trend contained" in lowered:
+                claim_id = "trend.cross_source_observation_count"
+
+            elif (
+                "cdc places age-adjusted prevalence" in lowered
+                and "absolute change" in lowered
+            ):
+                claim_id = "trend.places_prevalence_change"
+
+            elif (
+                "ihme yll rate" in lowered
+                and "absolute change" in lowered
+            ):
+                claim_id = "trend.ihme_yll_change"
+
+            elif "same-year observation" in lowered:
+                claim_id = "trend.same_year_overlap"
+
+            elif (
+                "different measures" in lowered
+                and "causal relationship" in lowered
+            ):
+                claim_id = "trend.cross_source_interpretation_guardrail"
+
+            elif "annual observations" in lowered:
                 claim_id = "trend.observation_count"
 
             elif "absolute change" in lowered:
