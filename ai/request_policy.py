@@ -17,6 +17,20 @@ from ai.validation import (
 NATIONAL_SCOPE = "United States"
 
 
+PLACES_FIRST_YEAR = 2018
+PLACES_LAST_YEAR = 2023
+
+CROSS_SOURCE_FIRST_YEAR = min(
+    SUPPORTED_FIRST_YEAR,
+    PLACES_FIRST_YEAR,
+)
+
+CROSS_SOURCE_LAST_YEAR = max(
+    SUPPORTED_LAST_YEAR,
+    PLACES_LAST_YEAR,
+)
+
+
 def _requested_years(
     request: SemanticAnalysisRequest,
 ) -> list[int]:
@@ -41,6 +55,29 @@ def _requested_years(
         )
 
     return years
+
+
+def _supported_year_bounds(
+    request: SemanticAnalysisRequest,
+) -> tuple[int, int]:
+    """
+    Return the permitted analysis-year window for the
+    requested evidence domain.
+
+    IHME and unspecified requests retain the legacy
+    IHME analytical period. PLACES_IHME uses the union
+    of the currently supported source periods.
+    """
+    if request.evidence_domain == "PLACES_IHME":
+        return (
+            CROSS_SOURCE_FIRST_YEAR,
+            CROSS_SOURCE_LAST_YEAR,
+        )
+
+    return (
+        SUPPORTED_FIRST_YEAR,
+        SUPPORTED_LAST_YEAR,
+    )
 
 
 def _reject(
@@ -147,6 +184,32 @@ def apply_request_policy(
             ),
         )
 
+        # ------------------------------------------------------------
+    # Evidence-domain execution boundaries.
+    # ------------------------------------------------------------
+
+    if request.evidence_domain == "PLACES":
+        return _reject(
+            request,
+            (
+                "CDC PLACES-only semantic execution is not yet "
+                "available in the validated EpiCounty AI pipeline."
+            ),
+        )
+
+    if (
+        request.evidence_domain == "PLACES_IHME"
+        and request.intent is not AnalysisIntent.TREND_COMPARISON
+    ):
+        return _reject(
+            request,
+            (
+                "Combined CDC PLACES and IHME semantic execution "
+                "is currently supported only for county trend "
+                "analysis."
+            ),
+        )
+
     # ------------------------------------------------------------
     # 2. Reject explicitly requested years outside the supported data
     #    period before defaults are applied.
@@ -155,13 +218,16 @@ def apply_request_policy(
     explicit_years = _requested_years(
         request
     )
+    supported_first_year, supported_last_year = (
+        _supported_year_bounds(request)
+    )
 
     invalid_years = [
         year
         for year in explicit_years
         if (
-            year < SUPPORTED_FIRST_YEAR
-            or year > SUPPORTED_LAST_YEAR
+           year < supported_first_year
+           or year > supported_last_year
         )
     ]
 
@@ -179,8 +245,8 @@ def apply_request_policy(
                 "The requested year or years "
                 f"({requested}) fall outside the available "
                 f"EpiCounty analytical period of "
-                f"{SUPPORTED_FIRST_YEAR}-"
-                f"{SUPPORTED_LAST_YEAR}."
+               f"{supported_first_year}-"
+               f"{supported_last_year}."
             ),
         )
 
@@ -280,21 +346,25 @@ def apply_request_policy(
 
         normalized = request
 
+        trend_first_year, trend_last_year = (
+            _supported_year_bounds(normalized)
+        )
+
         if (
             normalized.start_year is None
             and normalized.end_year is None
         ):
             normalized = replace(
                 normalized,
-                start_year=SUPPORTED_FIRST_YEAR,
-                end_year=SUPPORTED_LAST_YEAR,
+                start_year=trend_first_year,
+                end_year=trend_last_year,
             )
 
             assumptions.append(
                 "No trend period was specified; EpiCounty used "
                 f"the full available period, "
-                f"{SUPPORTED_FIRST_YEAR}-"
-                f"{SUPPORTED_LAST_YEAR}."
+               f"{trend_first_year}-"
+               f"{trend_last_year}."
             )
 
         elif (
@@ -303,13 +373,13 @@ def apply_request_policy(
         ):
             normalized = replace(
                 normalized,
-                end_year=SUPPORTED_LAST_YEAR,
+                end_year=trend_last_year,
             )
 
             assumptions.append(
                 "No ending year was specified; EpiCounty used "
                 f"the latest available year, "
-                f"{SUPPORTED_LAST_YEAR}."
+                f"{trend_last_year}."
             )
 
         elif (
@@ -318,13 +388,13 @@ def apply_request_policy(
         ):
             normalized = replace(
                 normalized,
-                start_year=SUPPORTED_FIRST_YEAR,
+                start_year=trend_first_year,
             )
 
             assumptions.append(
                 "No starting year was specified; EpiCounty used "
                 f"the earliest available year, "
-                f"{SUPPORTED_FIRST_YEAR}."
+                f"{trend_first_year}."
             )
 
         if (
