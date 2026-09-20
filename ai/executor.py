@@ -198,9 +198,9 @@ def execute_plan(
     the plan parameters. Every analytical result is stored as an
     EvidenceItem with its originating function and parameters.
 
-    When a filtering step returns the same DataFrame as the immediately
-    preceding analytical step, the redundant earlier evidence item is
-    replaced by the filtered evidence item.
+    Filtering steps refine the immediately preceding analytical result.
+    The filtered result replaces the unfiltered evidence item so downstream
+    interpretation receives only the requested analytical period.
     """
     if plan.unresolved_items:
         raise ExecutionError(
@@ -229,28 +229,37 @@ def execute_plan(
         if result is None:
             continue
 
-        is_redundant_filter = (
-            step.function_name == "filter_dataframe"
+        is_filter_step = (
+            step.function_name
+            in {
+                "filter_dataframe",
+                "filter_analysis_year_dataframe",
+            }
             and previous_data is not None
-            and result.equals(previous_data)
             and bool(evidence_items)
         )
 
-        if is_redundant_filter:
+        if is_filter_step:
+            previous_item = evidence_items[-1]
+
             evidence_items[-1] = EvidenceItem(
                 evidence_type="dataframe",
                 title=_evidence_title(step),
                 data=result,
-                source_function=step.function_name,
-                parameters=dict(step.parameters),
+                source_function=previous_item.source_function,
+                parameters={
+                    **previous_item.parameters,
+                    **step.parameters,
+                },
                 interpretation_note=step.purpose,
             )
 
-            warnings.append(
-                "The requested year filter matched the full available "
-                "trend period, so the duplicate unfiltered evidence "
-                "table was suppressed."
-            )
+            if result.equals(previous_data):
+                warnings.append(
+                    "The requested year filter matched the full available "
+                    "trend period, so the duplicate unfiltered evidence "
+                    "table was suppressed."
+                )
 
         else:
             evidence_items.append(
@@ -277,11 +286,11 @@ def execute_plan(
         )
 
     return EvidenceBundle(
-    question=plan.question,
-    intent=plan.intent,
-    items=evidence_items,
-    warnings=warnings,
-    context=dict(
-        plan.resolved_context
-    ),
-)
+        question=plan.question,
+        intent=plan.intent,
+        items=evidence_items,
+        warnings=warnings,
+        context=dict(
+            plan.resolved_context
+        ),
+    )
