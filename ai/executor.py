@@ -20,6 +20,7 @@ from app.data_access import (
     get_county_disparity_ranking,
     get_county_ranking,
     get_long_term_change,
+    get_places_ihme_county_trend_context,
     get_top_causes,
 )
 
@@ -36,6 +37,9 @@ APPROVED_FUNCTIONS: dict[str, Callable[..., pd.DataFrame]] = {
     "get_cause_trend": get_cause_trend,
     "get_county_disparity_ranking": get_county_disparity_ranking,
     "get_county_ranking": get_county_ranking,
+    "get_places_ihme_county_trend_context": (
+    get_places_ihme_county_trend_context
+),
 }
 
 
@@ -82,6 +86,26 @@ def _filter_dataframe(
     ].copy()
 
 
+def _filter_analysis_year_dataframe(
+    dataframe: pd.DataFrame,
+    *,
+    first_year: int,
+    last_year: int,
+) -> pd.DataFrame:
+    if "analysis_year" not in dataframe.columns:
+        raise ExecutionError(
+            "Analysis-year filtering requires an "
+            "'analysis_year' column."
+        )
+
+    return dataframe.loc[
+        dataframe["analysis_year"].between(
+            int(first_year),
+            int(last_year),
+        )
+    ].copy()
+
+
 def _execute_step(
     step: AnalysisStep,
     previous_data: pd.DataFrame | None,
@@ -96,6 +120,17 @@ def _execute_step(
             )
 
         return _filter_dataframe(
+            previous_data,
+            **step.parameters,
+        )
+    if step.function_name == "filter_analysis_year_dataframe":
+        if previous_data is None:
+            raise ExecutionError(
+                "filter_analysis_year_dataframe requires "
+                "a previous DataFrame."
+            )
+
+        return _filter_analysis_year_dataframe(
             previous_data,
             **step.parameters,
         )
@@ -139,6 +174,12 @@ def _evidence_title(
         "restrict_year_range": (
             "Requested-period trend"
         ),
+        "places_ihme_county_trend": (
+    "CDC PLACES and IHME county trend"
+),
+"restrict_analysis_year_range": (
+    "Requested-period cross-source trend"
+),
     }
 
     return title_map.get(

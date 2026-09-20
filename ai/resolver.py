@@ -1266,6 +1266,28 @@ def resolve_plan(
             for step in plan.steps:
                 if (
                     step.operation
+                    == "places_ihme_county_trend"
+                ):
+                    if places_measure is None:
+                        raise ResolutionError(
+                            "CDC PLACES measure resolution is required "
+                            "for PLACES_IHME trend analysis."
+                        )
+
+                    step.parameters.update(
+                        {
+                            "fips": county["fips"],
+                            "places_measure_id": places_measure[
+                                "measure_id"
+                            ],
+                            "ihme_cause_id": cause[
+                                "cause_id"
+                            ],
+                        }
+                    )
+
+                elif (
+                    step.operation
                     == "cause_trend"
                 ):
                     step.parameters[
@@ -1276,10 +1298,10 @@ def resolve_plan(
                         "fips"
                     ] = county["fips"]
 
-                elif (
-                    step.operation
-                    == "restrict_year_range"
-                ):
+                elif step.operation in {
+                    "restrict_year_range",
+                    "restrict_analysis_year_range",
+                }:
                     if (
                         step.parameters.get(
                             "first_year"

@@ -151,53 +151,114 @@ def build_analysis_plan(
             entities
         )
 
-        steps.extend(
-            [
-                AnalysisStep(
-                    step_number=1,
-                    operation="resolve_counties",
-                    function_name="get_counties",
-                    parameters={},
-                    purpose=(
-                        "Resolve requested county names and FIPS codes."
+        if evidence_domain == "PLACES_IHME":
+            steps.extend(
+                [
+                    AnalysisStep(
+                        step_number=1,
+                        operation="resolve_counties",
+                        function_name="get_counties",
+                        parameters={},
+                        purpose=(
+                            "Resolve requested county names "
+                            "and FIPS codes."
+                        ),
                     ),
-                ),
-                AnalysisStep(
-                    step_number=2,
-                    operation="resolve_cause",
-                    function_name="get_causes",
-                    parameters={},
-                    purpose=(
-                        "Resolve the requested cause against "
-                        "the validated cause lookup."
+                    AnalysisStep(
+                        step_number=2,
+                        operation="resolve_cause",
+                        function_name="get_causes",
+                        parameters={},
+                        purpose=(
+                            "Resolve the requested IHME cause "
+                            "against the validated cause lookup."
+                        ),
                     ),
-                ),
-                AnalysisStep(
-                    step_number=3,
-                    operation="cause_trend",
-                    function_name="get_cause_trend",
-                    parameters={
-                        "fips": None,
-                        "cause_id": None,
-                    },
-                    purpose=(
-                        "Retrieve the annual county cause trend."
+                    AnalysisStep(
+                        step_number=3,
+                        operation="places_ihme_county_trend",
+                        function_name=(
+                            "get_places_ihme_county_trend_context"
+                        ),
+                        parameters={
+                            "fips": None,
+                            "places_measure_id": None,
+                            "ihme_cause_id": None,
+                        },
+                        purpose=(
+                            "Retrieve CDC PLACES prevalence and "
+                            "IHME YLL trends while preserving the "
+                            "two evidence systems separately."
+                        ),
                     ),
-                ),
-                AnalysisStep(
-                    step_number=4,
-                    operation="restrict_year_range",
-                    function_name="filter_dataframe",
-                    parameters={
-                        "first_year": first_year,
-                        "last_year": last_year,
-                    },
-                    purpose=(
-                        "Restrict the evidence to the requested period."
+                    AnalysisStep(
+                        step_number=4,
+                        operation="restrict_analysis_year_range",
+                        function_name=(
+                            "filter_analysis_year_dataframe"
+                        ),
+                        parameters={
+                            "first_year": first_year,
+                            "last_year": last_year,
+                        },
+                        purpose=(
+                            "Restrict the cross-source evidence "
+                            "to the requested analysis-year period."
+                        ),
                     ),
-                ),
-            ]
-        )
+                ]
+            )
+
+        else:
+            steps.extend(
+                [
+                    AnalysisStep(
+                        step_number=1,
+                        operation="resolve_counties",
+                        function_name="get_counties",
+                        parameters={},
+                        purpose=(
+                            "Resolve requested county names "
+                            "and FIPS codes."
+                        ),
+                    ),
+                    AnalysisStep(
+                        step_number=2,
+                        operation="resolve_cause",
+                        function_name="get_causes",
+                        parameters={},
+                        purpose=(
+                            "Resolve the requested cause against "
+                            "the validated cause lookup."
+                        ),
+                    ),
+                    AnalysisStep(
+                        step_number=3,
+                        operation="cause_trend",
+                        function_name="get_cause_trend",
+                        parameters={
+                            "fips": None,
+                            "cause_id": None,
+                        },
+                        purpose=(
+                            "Retrieve the annual county cause trend."
+                        ),
+                    ),
+                    AnalysisStep(
+                        step_number=4,
+                        operation="restrict_year_range",
+                        function_name="filter_dataframe",
+                        parameters={
+                            "first_year": first_year,
+                            "last_year": last_year,
+                        },
+                        purpose=(
+                            "Restrict the evidence to the "
+                            "requested period."
+                        ),
+                    ),
+                ]
+            )
 
     elif intent == AnalysisIntent.COUNTY_RANKING:
         year = _default_year(entities)
