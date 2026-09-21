@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ai.models import (
     ClassifiedQuestion,
+    ResearchQuestion,
     SemanticAnalysisRequest,
 )
 
@@ -71,12 +72,14 @@ def semantic_request_to_classified(
         ] = request.evidence_domain
 
     return ClassifiedQuestion(
-        question=request.question,
-        intent=request.intent,
-        confidence=request.confidence,
-        extracted_entities=entities,
-        explanation=(
-            "LLM semantic routing: "
-            + request.explanation
-        ),
-    )
+    question=ResearchQuestion(
+        raw_text=request.question,
+    ),
+    intent=request.intent,
+    confidence=request.confidence,
+    extracted_entities=entities,
+    explanation=(
+        "LLM semantic routing: "
+        + request.explanation
+    ),
+)
