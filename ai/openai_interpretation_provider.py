@@ -198,6 +198,24 @@ Rules:
    such as adults, children, older adults, women, men, patients,
    residents, or age-specific populations unless those qualifiers
    appear in the validated evidence.
+   5a. Do not add interpretive bridge language, generalizations, or
+    conclusions that are not explicitly stated in the cited claims.
+
+    For example, do not add phrases such as:
+    - "the pattern was not universal";
+    - "this suggests";
+    - "this indicates a broader pattern";
+    - "despite the overall trend";
+    - "there were important exceptions";
+    - "the results were mixed";
+
+    unless that exact meaning is explicitly supported by the cited
+    evidence claims.
+
+    When describing disparity evidence, state the supplied median gap,
+    direction counts, largest positive gap, or largest reverse gap
+    directly. Do not infer a broader population-level conclusion from
+    those facts.
 
 6. Return at least one interpretation statement.
 

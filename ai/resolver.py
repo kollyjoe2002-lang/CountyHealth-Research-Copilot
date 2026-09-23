@@ -1232,6 +1232,49 @@ def resolve_plan(
                 ] = analysis_year
 
         elif plan.intent == (
+            AnalysisIntent.COUNTY_RANKING
+        ):
+            cause = resolve_cause(
+                cause_resolution_text
+            )
+
+            analysis_year: int | None = None
+
+            for step in plan.steps:
+                if "cause_id" in step.parameters:
+                    step.parameters[
+                        "cause_id"
+                    ] = cause["cause_id"]
+
+                if (
+                    step.parameters.get("year")
+                    is not None
+                    and analysis_year is None
+                ):
+                    analysis_year = int(
+                        step.parameters["year"]
+                    )
+
+            plan.assumptions.append(
+                "Resolved cause: "
+                f"{cause['cause_name']}."
+            )
+
+            plan.resolved_context.update(
+                {
+                    "cause_id": cause["cause_id"],
+                    "cause_name": cause[
+                        "cause_name"
+                    ],
+                }
+            )
+
+            if analysis_year is not None:
+                plan.resolved_context[
+                    "year"
+                ] = analysis_year
+
+        elif plan.intent == (
             AnalysisIntent.TREND_COMPARISON
         ):
             county = resolve_county(
