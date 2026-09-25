@@ -287,6 +287,87 @@ def resolve_cause(
         ),
     }
 
+PLACES_IHME_ALLOWED_PAIRS: dict[str, set[int]] = {
+    "DIABETES": {976},
+}
+
+
+def validate_places_ihme_pair(
+    places_measure: dict[str, Any],
+    cause: dict[str, Any],
+) -> None:
+    """
+    Validate that a resolved CDC PLACES measure and IHME cause form
+    an explicitly approved cross-source conceptual pair.
+
+    Cross-source compatibility is deterministic and fail-closed.
+    Independently resolvable concepts are not assumed to be
+    epidemiologically equivalent.
+    """
+    measure_id = str(
+        places_measure["measure_id"]
+    ).upper()
+
+    cause_id = int(
+        cause["cause_id"]
+    )
+
+    allowed_cause_ids = (
+        PLACES_IHME_ALLOWED_PAIRS.get(
+            measure_id
+        )
+    )
+
+    if (
+        allowed_cause_ids is None
+        or cause_id not in allowed_cause_ids
+    ):
+        raise ResolutionError(
+            "The resolved CDC PLACES measure and IHME cause "
+            "are not an approved cross-source conceptual pair: "
+            f"{measure_id} and IHME cause {cause_id}."
+        )
+
+
+def _extract_places_resolution_text(
+    question_text: str,
+) -> str:
+    """
+    Isolate the CDC PLACES portion of an explicitly cross-source
+    PLACES_IHME question.
+
+    This prevents an IHME-side disease concept from being mistaken
+    for the requested PLACES measure.
+    """
+    normalized = _normalize_text(
+        question_text
+    )
+
+    places_marker = "cdc places"
+    ihme_marker = "ihme"
+
+    places_index = normalized.find(
+        places_marker
+    )
+    ihme_index = normalized.find(
+        ihme_marker
+    )
+
+    if places_index == -1:
+        return question_text
+
+    if (
+        ihme_index != -1
+        and places_index < ihme_index
+    ):
+        return normalized[
+            places_index:ihme_index
+        ].strip()
+
+    return normalized[
+        places_index:
+    ].strip()
+
 
 def resolve_places_measure(
     question_text: str,
@@ -1297,10 +1378,21 @@ def resolve_plan(
             ] | None = None
 
             if evidence_domain == "PLACES_IHME":
-                places_measure = (
-                    resolve_places_measure(
+                places_resolution_text = (
+                    _extract_places_resolution_text(
                         question_text
                     )
+                )
+
+                places_measure = (
+                    resolve_places_measure(
+                        places_resolution_text
+                    )
+                )
+
+                validate_places_ihme_pair(
+                    places_measure,
+                    cause,
                 )
 
             first_year: int | None = None

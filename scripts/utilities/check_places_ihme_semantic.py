@@ -52,6 +52,33 @@ def _run_case(
 
         return True, "PASS: safely clarified"
 
+    if case_id == "P04":
+        if outcome.status != "clarify":
+            return (
+                False,
+                f"Expected safe clarification, got {outcome.status}.",
+            )
+
+        if outcome.evidence_bundle is not None:
+            return (
+                False,
+                "P04 unexpectedly produced analytical evidence.",
+            )
+
+        expected_message = (
+            "STROKE and IHME cause 976"
+        )
+
+        if expected_message not in (
+            outcome.clarification_question or ""
+        ):
+            return (
+                False,
+                "P04 did not report the expected incompatible pair.",
+            )
+
+        return True, "PASS: incompatible pair blocked"
+
     if outcome.status != "answer":
         return (
             False,
@@ -240,6 +267,29 @@ def main() -> None:
                 evidence_domain="PLACES_IHME",
                 explanation=(
                     "Explicit cross-source breast cancer trend request."
+                ),
+            ),
+        ),
+        (
+            "P04",
+            "Incompatible PLACES and IHME concepts fail safely",
+            SemanticAnalysisRequest(
+                question=ResearchQuestion(
+                    raw_text=(
+                        "Compare CDC PLACES stroke prevalence "
+                        "with IHME diabetes burden in Milwaukee "
+                        "County, Wisconsin from 2018 to 2019."
+                    )
+                ),
+                intent=AnalysisIntent.TREND_COMPARISON,
+                confidence=1.0,
+                county_name="Milwaukee County, Wisconsin",
+                cause_name="diabetes",
+                start_year=2018,
+                end_year=2019,
+                evidence_domain="PLACES_IHME",
+                explanation=(
+                    "Deliberately incompatible cross-source concepts."
                 ),
             ),
         ),
