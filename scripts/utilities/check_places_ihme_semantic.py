@@ -78,6 +78,16 @@ def _run_case(
             )
 
         return True, "PASS: incompatible pair blocked"
+    expected_pairs = {
+        "P01": ("DIABETES", 976),
+        "P02": ("DIABETES", 976),
+        "P05": ("STROKE", 494),
+        "P06": ("CASTHMA", 515),
+    }
+
+    expected_pair = expected_pairs.get(
+        case_id
+    )
 
     if outcome.status != "answer":
         return (
@@ -94,14 +104,29 @@ def _run_case(
 
     bundle = outcome.evidence_bundle
 
+    if expected_pair is not None:
+        expected_measure_id, expected_cause_id = (
+            expected_pair
+        )
+
+        context = outcome.evidence_bundle.context
+
+        if context.get("places_measure_id") != expected_measure_id:
+            return (
+                False,
+                f"Expected PLACES {expected_measure_id}, got "
+                f"{context.get('places_measure_id')}.",
+            )
+
+        if context.get("cause_id") != expected_cause_id:
+            return (
+                False,
+                f"Expected IHME cause {expected_cause_id}, got "
+                f"{context.get('cause_id')}.",
+            )
+
     if bundle.context.get("evidence_domain") != "PLACES_IHME":
         return False, "Incorrect evidence domain."
-
-    if bundle.context.get("places_measure_id") != "DIABETES":
-        return False, "Expected PLACES measure DIABETES."
-
-    if bundle.context.get("cause_id") != 976:
-        return False, "Expected IHME cause 976."
 
     if len(bundle.items) != 1:
         return (
@@ -290,6 +315,52 @@ def main() -> None:
                 evidence_domain="PLACES_IHME",
                 explanation=(
                     "Deliberately incompatible cross-source concepts."
+                ),
+            ),
+        ),
+        (
+            "P05",
+            "Milwaukee stroke cross-source trend",
+            SemanticAnalysisRequest(
+                question=ResearchQuestion(
+                    raw_text=(
+                        "Compare CDC PLACES stroke prevalence "
+                        "with IHME stroke burden in Milwaukee "
+                        "County, Wisconsin from 2018 to 2019."
+                    )
+                ),
+                intent=AnalysisIntent.TREND_COMPARISON,
+                confidence=1.0,
+                county_name="Milwaukee County, Wisconsin",
+                cause_name="stroke",
+                start_year=2018,
+                end_year=2019,
+                evidence_domain="PLACES_IHME",
+                explanation=(
+                    "Validated cross-source stroke trend request."
+                ),
+            ),
+        ),
+        (
+            "P06",
+            "Milwaukee asthma cross-source trend",
+            SemanticAnalysisRequest(
+                question=ResearchQuestion(
+                    raw_text=(
+                        "Compare CDC PLACES asthma prevalence "
+                        "with IHME asthma burden in Milwaukee "
+                        "County, Wisconsin from 2018 to 2019."
+                    )
+                ),
+                intent=AnalysisIntent.TREND_COMPARISON,
+                confidence=1.0,
+                county_name="Milwaukee County, Wisconsin",
+                cause_name="asthma",
+                start_year=2018,
+                end_year=2019,
+                evidence_domain="PLACES_IHME",
+                explanation=(
+                    "Validated cross-source asthma trend request."
                 ),
             ),
         ),

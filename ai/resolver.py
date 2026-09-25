@@ -289,6 +289,8 @@ def resolve_cause(
 
 PLACES_IHME_ALLOWED_PAIRS: dict[str, set[int]] = {
     "DIABETES": {976},
+    "STROKE": {494},
+    "CASTHMA": {515},
 }
 
 
