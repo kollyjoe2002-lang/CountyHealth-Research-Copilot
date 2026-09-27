@@ -17,6 +17,10 @@ class SemanticCase:
     question: str
     expected_intent: AnalysisIntent
     expected_dimension: str | None = None
+    expected_evidence_domain: str | None = None
+    expected_year: int | None = None
+    expected_start_year: int | None = None
+    expected_end_year: int | None = None
     expect_county: bool = False
     expect_cause: bool = False
 
@@ -72,6 +76,7 @@ CASES = [
         "S08",
         "What is the diabetes burden in Milwaukee County?",
         AnalysisIntent.COUNTY_CAUSE_SNAPSHOT,
+        expected_evidence_domain="IHME",
         expect_county=True,
         expect_cause=True,
     ),
@@ -89,10 +94,11 @@ CASES = [
         expect_county=True,
         expect_cause=True,
     ),
-    SemanticCase(
+     SemanticCase(
         "S11",
         "Which counties have the highest diabetes burden?",
         AnalysisIntent.COUNTY_RANKING,
+        expected_evidence_domain="IHME",
         expect_cause=True,
     ),
     SemanticCase(
@@ -120,6 +126,72 @@ CASES = [
         "S15",
         "Predict diabetes rates in Milwaukee County in 2035",
         AnalysisIntent.UNKNOWN,
+        expect_county=True,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S16",
+        "What was the IHME diabetes burden in Milwaukee County, Wisconsin in 2019?",
+        AnalysisIntent.COUNTY_CAUSE_SNAPSHOT,
+        expected_evidence_domain="IHME",
+        expected_year=2019,
+        expect_county=True,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S17",
+        "What was the CDC PLACES diabetes prevalence in Milwaukee County, Wisconsin in 2023?",
+        AnalysisIntent.COUNTY_CAUSE_SNAPSHOT,
+        expected_evidence_domain="PLACES",
+        expected_year=2023,
+        expect_county=True,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S18",
+        "Compare CDC PLACES diabetes prevalence with IHME diabetes burden in Milwaukee County, Wisconsin from 2018 to 2023.",
+        AnalysisIntent.TREND_COMPARISON,
+        expected_evidence_domain="PLACES_IHME",
+        expected_start_year=2018,
+        expected_end_year=2023,
+        expect_county=True,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S19",
+        "Compare CDC PLACES stroke prevalence with IHME stroke burden in Milwaukee County, Wisconsin from 2018 to 2019.",
+        AnalysisIntent.TREND_COMPARISON,
+        expected_evidence_domain="PLACES_IHME",
+        expected_start_year=2018,
+        expected_end_year=2019,
+        expect_county=True,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S20",
+        "Compare CDC PLACES asthma prevalence with IHME asthma burden in Milwaukee County, Wisconsin from 2018 to 2019.",
+        AnalysisIntent.TREND_COMPARISON,
+        expected_evidence_domain="PLACES_IHME",
+        expected_start_year=2018,
+        expected_end_year=2019,
+        expect_county=True,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S21",
+        "How has diabetes changed in Milwaukee County, Wisconsin?",
+        AnalysisIntent.TREND_COMPARISON,
+        expected_evidence_domain=None,
+        expect_county=True,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S22",
+        "Compare CDC PLACES breast cancer prevalence with IHME breast cancer burden in Milwaukee County, Wisconsin from 2018 to 2019.",
+        AnalysisIntent.TREND_COMPARISON,
+        expected_evidence_domain="PLACES_IHME",
+        expected_start_year=2018,
+        expected_end_year=2019,
         expect_county=True,
         expect_cause=True,
     ),
@@ -178,7 +250,47 @@ def main() -> None:
             errors.append(
                 "cause was not extracted"
             )
+        if (
+            result.evidence_domain
+            != case.expected_evidence_domain
+        ):
+            errors.append(
+                "evidence domain expected "
+                f"{case.expected_evidence_domain!r}, "
+                "received "
+                f"{result.evidence_domain!r}"
+            )
 
+        if (
+            case.expected_year is not None
+            and result.year != case.expected_year
+        ):
+            errors.append(
+                f"year expected {case.expected_year}, "
+                f"received {result.year}"
+            )
+
+        if (
+            case.expected_start_year is not None
+            and result.start_year
+            != case.expected_start_year
+        ):
+            errors.append(
+                "start year expected "
+                f"{case.expected_start_year}, "
+                f"received {result.start_year}"
+            )
+
+        if (
+            case.expected_end_year is not None
+            and result.end_year
+            != case.expected_end_year
+        ):
+            errors.append(
+                "end year expected "
+                f"{case.expected_end_year}, "
+                f"received {result.end_year}"
+            )
         status = (
             "PASS"
             if not errors
@@ -214,7 +326,22 @@ def main() -> None:
             "Groups:",
             result.demographic_groups,
         )
-
+        print(
+            "Evidence domain:",
+            result.evidence_domain,
+        )
+        print(
+            "Year:",
+            result.year,
+        )
+        print(
+            "Start year:",
+            result.start_year,
+        )
+        print(
+            "End year:",
+            result.end_year,
+        )
         if errors:
             for error in errors:
                 print("ERROR:", error)
