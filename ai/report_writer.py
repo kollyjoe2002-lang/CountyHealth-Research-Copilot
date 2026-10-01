@@ -112,11 +112,24 @@ def _limitations(
             "Differences were not treated as statistically significant "
             "unless formal statistical testing was separately performed."
         ),
-        (
+    ]
+
+    evidence_domain = bundle.context.get(
+        "evidence_domain"
+    )
+
+    if evidence_domain == "PLACES":
+        limitations.append(
+            "CDC PLACES estimates are modeled prevalence estimates "
+            "derived from BRFSS and related data sources; the "
+            "measurement year should be distinguished from the "
+            "PLACES release year."
+        )
+    else:
+        limitations.append(
             "The analysis should be interpreted alongside the original "
             "IHME data-release documentation."
-        ),
-    ]
+        )
 
     if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
         group_b_name = str(

@@ -10,7 +10,18 @@ from ai.models import (
 
 SUPPORTED_FIRST_YEAR = 2000
 SUPPORTED_LAST_YEAR = 2019
-CROSS_SOURCE_LAST_YEAR = 2023
+
+PLACES_FIRST_YEAR = 2018
+PLACES_LAST_YEAR = 2023
+
+CROSS_SOURCE_FIRST_YEAR = min(
+    SUPPORTED_FIRST_YEAR,
+    PLACES_FIRST_YEAR,
+)
+CROSS_SOURCE_LAST_YEAR = max(
+    SUPPORTED_LAST_YEAR,
+    PLACES_LAST_YEAR,
+)
 
 
 class QuestionValidationError(
@@ -118,17 +129,23 @@ def validate_question(
         )
     )
 
-    supported_last_year = (
-        CROSS_SOURCE_LAST_YEAR
-        if evidence_domain == "PLACES_IHME"
-        else SUPPORTED_LAST_YEAR
-    )
+    if evidence_domain == "PLACES":
+        supported_first_year = PLACES_FIRST_YEAR
+        supported_last_year = PLACES_LAST_YEAR
+
+    elif evidence_domain == "PLACES_IHME":
+        supported_first_year = CROSS_SOURCE_FIRST_YEAR
+        supported_last_year = CROSS_SOURCE_LAST_YEAR
+
+    else:
+        supported_first_year = SUPPORTED_FIRST_YEAR
+        supported_last_year = SUPPORTED_LAST_YEAR
 
     invalid_years = [
         int(year)
         for year in years
         if (
-            int(year) < SUPPORTED_FIRST_YEAR
+            int(year) < supported_first_year
             or int(year) > supported_last_year
         )
     ]
@@ -141,6 +158,6 @@ def validate_question(
 
         raise QuestionValidationError(
             "Requested years are outside the supported range "
-            f"of {SUPPORTED_FIRST_YEAR}-{supported_last_year}: "
+            f"of {supported_first_year}-{supported_last_year}: "
             f"{requested}."
         )

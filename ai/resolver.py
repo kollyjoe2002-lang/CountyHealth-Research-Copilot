@@ -1259,60 +1259,130 @@ def resolve_plan(
                 county_resolution_text
             )
 
-            cause = resolve_cause(
-                cause_resolution_text
+            evidence_domain = plan.resolved_context.get(
+                "evidence_domain"
             )
 
             analysis_year: int | None = None
 
-            for step in plan.steps:
-                if (
-                    step.operation
-                    == "county_cause_snapshot"
-                ):
-                    step.parameters.update(
-                        {
-                            "fips": county["fips"],
-                            "cause_id": cause["cause_id"],
-                        }
-                    )
+            if evidence_domain == "PLACES":
+                places_measure = resolve_places_measure(
+                    question_text
+                )
 
+                for step in plan.steps:
                     if (
-                        step.parameters.get("year")
-                        is not None
+                        step.operation
+                        == "places_county_measure_history"
                     ):
-                        analysis_year = int(
-                            step.parameters["year"]
+                        step.parameters.update(
+                            {
+                                "fips": county["fips"],
+                                "measure_id": places_measure[
+                                    "measure_id"
+                                ],
+                            }
                         )
 
-            plan.assumptions.append(
-                "Resolved county: "
-                f"{county['location_name']} "
-                f"({county['fips']})."
-            )
+                    elif (
+                        step.operation
+                        == "restrict_measurement_year"
+                    ):
+                        if (
+                            step.parameters.get(
+                                "measurement_year"
+                            )
+                            is not None
+                        ):
+                            analysis_year = int(
+                                step.parameters[
+                                    "measurement_year"
+                                ]
+                            )
 
-            plan.assumptions.append(
-                "Resolved cause: "
-                f"{cause['cause_name']}."
-            )
+                plan.assumptions.append(
+                    "Resolved county: "
+                    f"{county['location_name']} "
+                    f"({county['fips']})."
+                )
 
-            plan.resolved_context.update(
-                {
-                    "fips": county["fips"],
-                    "location_name": county[
-                        "location_name"
-                    ],
-                    "cause_id": cause["cause_id"],
-                    "cause_name": cause[
-                        "cause_name"
-                    ],
-                }
-            )
+                plan.assumptions.append(
+                    "Resolved CDC PLACES measure: "
+                    f"{places_measure['measure_name']} "
+                    f"({places_measure['measure_id']})."
+                )
 
-            if analysis_year is not None:
-                plan.resolved_context[
-                    "year"
-                ] = analysis_year
+                plan.resolved_context.update(
+                    {
+                        "fips": county["fips"],
+                        "location_name": county[
+                            "location_name"
+                        ],
+                        "places_measure_id": places_measure[
+                            "measure_id"
+                        ],
+                        "places_measure_name": places_measure["measure_name"],
+                    }
+                )
+
+                if analysis_year is not None:
+                    plan.resolved_context[
+                        "measurement_year"
+                    ] = analysis_year
+
+            else:
+                cause = resolve_cause(
+                    cause_resolution_text
+                )
+
+                for step in plan.steps:
+                    if (
+                        step.operation
+                        == "county_cause_snapshot"
+                    ):
+                        step.parameters.update(
+                            {
+                                "fips": county["fips"],
+                                "cause_id": cause["cause_id"],
+                            }
+                        )
+
+                        if (
+                            step.parameters.get("year")
+                            is not None
+                        ):
+                            analysis_year = int(
+                                step.parameters["year"]
+                            )
+
+                plan.assumptions.append(
+                    "Resolved county: "
+                    f"{county['location_name']} "
+                    f"({county['fips']})."
+                )
+
+                plan.assumptions.append(
+                    "Resolved cause: "
+                    f"{cause['cause_name']}."
+                )
+
+                plan.resolved_context.update(
+                    {
+                        "fips": county["fips"],
+                        "location_name": county[
+                            "location_name"
+                        ],
+                        "cause_id": cause["cause_id"],
+                        "cause_name": cause[
+                            "cause_name"
+                        ],
+                    }
+                )
+
+                if analysis_year is not None:
+                    plan.resolved_context[
+                        "year"
+                    ] = analysis_year
 
         elif plan.intent == (
             AnalysisIntent.COUNTY_RANKING

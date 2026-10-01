@@ -289,49 +289,88 @@ def build_analysis_plan(
             ]
         )
 
-
     elif intent == AnalysisIntent.COUNTY_CAUSE_SNAPSHOT:
         year = _default_year(entities)
 
-        steps.extend(
-            [
-                AnalysisStep(
-                    step_number=1,
-                    operation="resolve_county",
-                    function_name="get_counties",
-                    parameters={},
-                    purpose=(
-                        "Resolve the requested county and FIPS code."
+        if evidence_domain == "PLACES":
+            steps.extend(
+                [
+                    AnalysisStep(
+                        step_number=1,
+                        operation="resolve_county",
+                        function_name="get_counties",
+                        parameters={},
+                        purpose=(
+                            "Resolve the requested county and FIPS code."
+                        ),
                     ),
-                ),
-                AnalysisStep(
-                    step_number=2,
-                    operation="resolve_cause",
-                    function_name="get_causes",
-                    parameters={},
-                    purpose=(
-                        "Resolve the requested disease or cause against "
-                        "the validated cause lookup."
+                    AnalysisStep(
+                        step_number=2,
+                        operation="places_county_measure_history",
+                        function_name="get_places_county_measure_trend",
+                        parameters={
+                            "fips": None,
+                            "measure_id": None,
+                        },
+                        purpose=(
+                            "Retrieve the CDC PLACES history for the "
+                            "resolved county and measure."
+                        ),
                     ),
-                ),
-                AnalysisStep(
-                    step_number=3,
-                    operation="county_cause_snapshot",
-                    function_name="get_county_cause_record",
-                    parameters={
-                        "fips": None,
-                        "year": year,
-                        "cause_id": None,
-                    },
-                    purpose=(
-                        "Retrieve the validated county-year-cause burden "
-                        "estimate and ranking context."
+                    AnalysisStep(
+                        step_number=3,
+                        operation="restrict_measurement_year",
+                        function_name="filter_measurement_year_dataframe",
+                        parameters={
+                            "measurement_year": year,
+                        },
+                        purpose=(
+                            "Restrict CDC PLACES evidence to the "
+                            "requested BRFSS measurement year."
+                        ),
                     ),
-                ),
-            ]
-        )
-    
-    
+                ]
+            )
+
+        else:
+            steps.extend(
+                [
+                    AnalysisStep(
+                        step_number=1,
+                        operation="resolve_county",
+                        function_name="get_counties",
+                        parameters={},
+                        purpose=(
+                            "Resolve the requested county and FIPS code."
+                        ),
+                    ),
+                    AnalysisStep(
+                        step_number=2,
+                        operation="resolve_cause",
+                        function_name="get_causes",
+                        parameters={},
+                        purpose=(
+                            "Resolve the requested disease or cause against "
+                            "the validated cause lookup."
+                        ),
+                    ),
+                    AnalysisStep(
+                        step_number=3,
+                        operation="county_cause_snapshot",
+                        function_name="get_county_cause_record",
+                        parameters={
+                            "fips": None,
+                            "year": year,
+                            "cause_id": None,
+                        },
+                        purpose=(
+                            "Retrieve the validated county-year-cause burden "
+                            "estimate and ranking context."
+                        ),
+                    ),
+                ]
+            )
+
     elif intent == AnalysisIntent.COUNTY_PROFILE:
         year = _default_year(entities)
 

@@ -951,6 +951,122 @@ def _interpret_county_profile(
     return findings
 
 
+def _interpret_places_county_snapshot(
+    bundle: EvidenceBundle,
+) -> list[str]:
+    """
+    Interpret one validated CDC PLACES county-measure observation.
+    """
+    snapshot = _find_item(
+        bundle,
+        "get_places_county_measure_trend",
+    )
+
+    if snapshot.empty:
+        return [
+            "No CDC PLACES prevalence estimate was available "
+            "for the selected county, measure, and measurement year."
+        ]
+
+    _require_columns(
+        snapshot,
+        {
+            "geography_name",
+            "state_name",
+            "release_year",
+            "measurement_year",
+            "measure_id",
+            "measure_name",
+            "unit",
+            "data_source",
+            "age_adjusted_prevalence",
+            "age_adjusted_ci_lower",
+            "age_adjusted_ci_upper",
+            "carry_forward",
+            "dataset",
+        },
+        evidence_name="CDC PLACES county prevalence snapshot",
+    )
+
+    if len(snapshot) != 1:
+        raise EvidenceInterpretationError(
+            "CDC PLACES county prevalence snapshot must contain "
+            "exactly one observation."
+        )
+
+    row = snapshot.iloc[0]
+
+    geography_name = str(
+        row["geography_name"]
+    )
+
+    state_name = str(
+        row["state_name"]
+    )
+
+    measure_name = str(
+        row["measure_name"]
+    )
+
+    measurement_year = int(
+        row["measurement_year"]
+    )
+
+    release_year = int(
+        row["release_year"]
+    )
+
+    prevalence = _safe_float(
+        row["age_adjusted_prevalence"]
+    )
+
+    lower = _safe_float(
+        row["age_adjusted_ci_lower"]
+    )
+
+    upper = _safe_float(
+        row["age_adjusted_ci_upper"]
+    )
+
+    findings: list[str] = []
+
+    if prevalence is not None:
+        findings.append(
+            f"The CDC PLACES age-adjusted prevalence for "
+            f"{measure_name} in {geography_name}, {state_name} "
+            f"in BRFSS measurement year {measurement_year} was "
+            f"{_format_number(prevalence)}%."
+        )
+
+    if (
+        lower is not None
+        and upper is not None
+    ):
+        findings.append(
+            "The 95% confidence interval was "
+            f"{_format_number(lower)}% to "
+            f"{_format_number(upper)}%."
+        )
+
+    findings.append(
+        f"The estimate appears in the {release_year} CDC PLACES "
+        "release; the analytical time point is the underlying "
+        f"BRFSS measurement year {measurement_year}."
+    )
+
+    if bool(row["carry_forward"]):
+        findings.append(
+            "This PLACES observation was marked as carry-forward "
+            "rather than a new measurement-year estimate."
+        )
+    else:
+        findings.append(
+            "This PLACES observation was not marked as carry-forward."
+        )
+
+    return findings
+
+
 def _interpret_county_cause_snapshot(
     bundle: EvidenceBundle,
 ) -> list[str]:
@@ -1080,13 +1196,21 @@ def interpret_evidence(
     Convert validated analytical evidence into deterministic findings.
     """
     if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
-        return _interpret_disparity(
-            bundle
-        )
+        return _interpret_disparity(bundle)
+
     if bundle.intent == AnalysisIntent.COUNTY_CAUSE_SNAPSHOT:
+        if (
+            bundle.context.get("evidence_domain")
+            == "PLACES"
+        ):
+            return _interpret_places_county_snapshot(
+                bundle
+            )
+
         return _interpret_county_cause_snapshot(
             bundle
         )
+
     if bundle.intent == AnalysisIntent.TREND_COMPARISON:
         if (
             bundle.context.get("evidence_domain")
@@ -1135,6 +1259,10 @@ def build_evidence_claims(
     context_claims: list[EvidenceClaim] = []
 
     if bundle.intent == AnalysisIntent.COUNTY_CAUSE_SNAPSHOT:
+        evidence_domain = bundle.context.get(
+            "evidence_domain"
+        )
+
         location_name = str(
             bundle.context.get(
                 "location_name",
@@ -1142,50 +1270,99 @@ def build_evidence_claims(
             )
         )
 
-        cause_name = str(
-            bundle.context.get(
-                "cause_name",
-                "the selected cause",
+        if evidence_domain == "PLACES":
+            measure_name = str(
+                bundle.context.get(
+                    "places_measure_name",
+                    "the selected CDC PLACES measure",
+                )
             )
-        )
 
-        year = bundle.context.get(
-            "year"
-        )
-
-        context_text = (
-            f"The county disease-burden snapshot concerns "
-            f"{cause_name} in {location_name}"
-        )
-
-        if year is not None:
-            context_text += (
-                f" in {year}."
+            measurement_year = bundle.context.get(
+                "measurement_year"
             )
+
+            context_text = (
+                "The CDC PLACES county prevalence snapshot "
+                f"concerns {measure_name} in {location_name}"
+            )
+
+            if measurement_year is not None:
+                context_text += (
+                    " for BRFSS measurement year "
+                    f"{measurement_year}."
+                )
+            else:
+                context_text += "."
+
+            context_claims.append(
+                EvidenceClaim(
+                    claim_id="snapshot.context",
+                    text=context_text,
+                    source_function="resolved_context",
+                    metadata={
+                        "intent": bundle.intent.value,
+                        "evidence_domain": evidence_domain,
+                        "fips": bundle.context.get(
+                            "fips"
+                        ),
+                        "location_name": location_name,
+                        "places_measure_id": bundle.context.get(
+                            "places_measure_id"
+                        ),
+                        "places_measure_name": measure_name,
+                        "measurement_year": measurement_year,
+                        "measure": "Age-adjusted prevalence",
+                        "units": "Percent",
+                    },
+                )
+            )
+
         else:
-            context_text += "."
-
-        context_claims.append(
-            EvidenceClaim(
-                claim_id="snapshot.context",
-                text=context_text,
-                source_function="resolved_context",
-                metadata={
-                    "intent": bundle.intent.value,
-                    "fips": bundle.context.get(
-                        "fips"
-                    ),
-                    "location_name": location_name,
-                    "cause_id": bundle.context.get(
-                        "cause_id"
-                    ),
-                    "cause_name": cause_name,
-                    "year": year,
-                    "measure": "YLL rate",
-                    "units": "YLL-rate units",
-                },
+            cause_name = str(
+                bundle.context.get(
+                    "cause_name",
+                    "the selected cause",
+                )
             )
-        )
+
+            year = bundle.context.get(
+                "year"
+            )
+
+            context_text = (
+                "The county disease-burden snapshot concerns "
+                f"{cause_name} in {location_name}"
+            )
+
+            if year is not None:
+                context_text += (
+                    f" in {year}."
+                )
+            else:
+                context_text += "."
+
+            context_claims.append(
+                EvidenceClaim(
+                    claim_id="snapshot.context",
+                    text=context_text,
+                    source_function="resolved_context",
+                    metadata={
+                        "intent": bundle.intent.value,
+                        "fips": bundle.context.get(
+                            "fips"
+                        ),
+                        "location_name": location_name,
+                        "cause_id": bundle.context.get(
+                            "cause_id"
+                        ),
+                        "cause_name": cause_name,
+                        "year": year,
+                        "measure": "YLL rate",
+                        "units": "YLL-rate units",
+                    },
+                )
+            )
 
     elif bundle.intent == AnalysisIntent.COUNTY_PROFILE:
         location_name = str(
@@ -1504,27 +1681,55 @@ def build_evidence_claims(
 
         elif bundle.intent == AnalysisIntent.COUNTY_CAUSE_SNAPSHOT:
             if (
-                "yll rate" in lowered
-                and "estimated" in lowered
+                bundle.context.get("evidence_domain")
+                == "PLACES"
             ):
-                claim_id = "snapshot.yll_rate"
+                if "age-adjusted prevalence" in lowered:
+                    claim_id = "snapshot.places_prevalence"
 
-            elif "uncertainty interval" in lowered:
-                claim_id = "snapshot.uncertainty_interval"
+                elif "95% confidence interval" in lowered:
+                    claim_id = (
+                        "snapshot.places_confidence_interval"
+                    )
 
-            elif (
-                "ranked" in lowered
-                and "nationally" in lowered
-            ):
-                claim_id = "snapshot.national_rank"
+                elif "cdc places release" in lowered:
+                    claim_id = (
+                        "snapshot.places_release_provenance"
+                    )
 
-            elif "burden percentile" in lowered:
-                claim_id = "snapshot.burden_percentile"
+                elif "carry-forward" in lowered:
+                    claim_id = (
+                        "snapshot.places_carry_forward"
+                    )
+
+                else:
+                    claim_id = (
+                        f"county_cause_snapshot.finding.{index}"
+                    )
 
             else:
-                claim_id = (
-                    f"county_cause_snapshot.finding.{index}"
-                )
+                if (
+                    "yll rate" in lowered
+                    and "estimated" in lowered
+                ):
+                    claim_id = "snapshot.yll_rate"
+
+                elif "uncertainty interval" in lowered:
+                    claim_id = "snapshot.uncertainty_interval"
+
+                elif (
+                    "ranked" in lowered
+                    and "nationally" in lowered
+                ):
+                    claim_id = "snapshot.national_rank"
+
+                elif "burden percentile" in lowered:
+                    claim_id = "snapshot.burden_percentile"
+
+                else:
+                    claim_id = (
+                        f"county_cause_snapshot.finding.{index}"
+                    )
 
         elif bundle.intent == AnalysisIntent.COUNTY_PROFILE:
             if lowered.startswith("obesity prevalence"):

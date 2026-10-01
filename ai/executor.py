@@ -20,6 +20,7 @@ from app.data_access import (
     get_county_disparity_ranking,
     get_county_ranking,
     get_long_term_change,
+    get_places_county_measure_trend,
     get_places_ihme_county_trend_context,
     get_top_causes,
 )
@@ -37,9 +38,12 @@ APPROVED_FUNCTIONS: dict[str, Callable[..., pd.DataFrame]] = {
     "get_cause_trend": get_cause_trend,
     "get_county_disparity_ranking": get_county_disparity_ranking,
     "get_county_ranking": get_county_ranking,
+    "get_places_county_measure_trend": (
+        get_places_county_measure_trend
+    ),
     "get_places_ihme_county_trend_context": (
-    get_places_ihme_county_trend_context
-),
+        get_places_ihme_county_trend_context
+    ),
 }
 
 
@@ -86,6 +90,34 @@ def _filter_dataframe(
     ].copy()
 
 
+def _filter_measurement_year_dataframe(
+    dataframe: pd.DataFrame,
+    *,
+    measurement_year: int,
+) -> pd.DataFrame:
+    required_columns = {
+        "measurement_year",
+        "carry_forward",
+    }
+
+    missing_columns = required_columns.difference(
+        dataframe.columns
+    )
+
+    if missing_columns:
+        raise ExecutionError(
+            "Canonical PLACES measurement-year filtering requires "
+            f"columns: {sorted(required_columns)}."
+        )
+
+    return dataframe.loc[
+        dataframe["measurement_year"].eq(
+            int(measurement_year)
+        )
+        & dataframe["carry_forward"].eq(False)
+    ].copy()
+
+
 def _filter_analysis_year_dataframe(
     dataframe: pd.DataFrame,
     *,
@@ -123,6 +155,18 @@ def _execute_step(
             previous_data,
             **step.parameters,
         )
+    if step.function_name == "filter_measurement_year_dataframe":
+        if previous_data is None:
+            raise ExecutionError(
+                "filter_measurement_year_dataframe requires "
+                "a previous DataFrame."
+            )
+
+        return _filter_measurement_year_dataframe(
+            previous_data,
+            **step.parameters,
+        )
+
     if step.function_name == "filter_analysis_year_dataframe":
         if previous_data is None:
             raise ExecutionError(
@@ -180,6 +224,9 @@ def _evidence_title(
 "restrict_analysis_year_range": (
     "Requested-period cross-source trend"
 ),
+        "restrict_measurement_year": (
+            "CDC PLACES county prevalence snapshot"
+        ),
     }
 
     return title_map.get(
@@ -233,6 +280,7 @@ def execute_plan(
             step.function_name
             in {
                 "filter_dataframe",
+                "filter_measurement_year_dataframe",
                 "filter_analysis_year_dataframe",
             }
             and previous_data is not None

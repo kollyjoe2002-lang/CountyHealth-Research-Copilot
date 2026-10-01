@@ -63,11 +63,13 @@ def _supported_year_bounds(
     """
     Return the permitted analysis-year window for the
     requested evidence domain.
-
-    IHME and unspecified requests retain the legacy
-    IHME analytical period. PLACES_IHME uses the union
-    of the currently supported source periods.
     """
+    if request.evidence_domain == "PLACES":
+        return (
+            PLACES_FIRST_YEAR,
+            PLACES_LAST_YEAR,
+        )
+
     if request.evidence_domain == "PLACES_IHME":
         return (
             CROSS_SOURCE_FIRST_YEAR,
@@ -184,16 +186,20 @@ def apply_request_policy(
             ),
         )
 
-        # ------------------------------------------------------------
+    # ------------------------------------------------------------
     # Evidence-domain execution boundaries.
     # ------------------------------------------------------------
 
-    if request.evidence_domain == "PLACES":
+    if (
+        request.evidence_domain == "PLACES"
+        and request.intent
+        is not AnalysisIntent.COUNTY_CAUSE_SNAPSHOT
+    ):
         return _reject(
             request,
             (
-                "CDC PLACES-only semantic execution is not yet "
-                "available in the validated EpiCounty AI pipeline."
+                "CDC PLACES-only semantic execution is currently "
+                "supported only for county prevalence snapshots."
             ),
         )
 
@@ -267,14 +273,20 @@ def apply_request_policy(
         normalized = request
 
         if normalized.year is None:
+            default_year = (
+                PLACES_LAST_YEAR
+                if normalized.evidence_domain == "PLACES"
+                else SUPPORTED_LAST_YEAR
+            )
+
             normalized = replace(
                 normalized,
-                year=SUPPORTED_LAST_YEAR,
+                year=default_year,
             )
 
             assumptions.append(
                 "No year was specified; EpiCounty used the "
-                f"latest available year, {SUPPORTED_LAST_YEAR}."
+                f"latest available year, {default_year}."
             )
 
         return _execute(
@@ -310,14 +322,20 @@ def apply_request_policy(
         normalized = request
 
         if normalized.year is None:
+            default_year = (
+                PLACES_LAST_YEAR
+                if request.evidence_domain == "PLACES"
+                else SUPPORTED_LAST_YEAR
+            )
+
             normalized = replace(
                 normalized,
-                year=SUPPORTED_LAST_YEAR,
+                year=default_year,
             )
 
             assumptions.append(
                 "No year was specified; EpiCounty used the "
-                f"latest available year, {SUPPORTED_LAST_YEAR}."
+                f"latest available year, {default_year}."
             )
 
         return _execute(
