@@ -10,6 +10,7 @@ class AnalysisIntent(str, Enum):
     COUNTY_CAUSE_SNAPSHOT = "county_cause_snapshot"
     TREND_COMPARISON = "trend_comparison"
     DEMOGRAPHIC_DISPARITY = "demographic_disparity"
+    RURALITY_COMPARISON = "rurality_comparison"
     COUNTY_RANKING = "county_ranking"
     LONG_TERM_CHANGE = "long_term_change"
     UNKNOWN = "unknown"

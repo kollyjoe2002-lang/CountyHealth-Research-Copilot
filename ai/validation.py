@@ -22,7 +22,15 @@ CROSS_SOURCE_LAST_YEAR = max(
     SUPPORTED_LAST_YEAR,
     PLACES_LAST_YEAR,
 )
+RURALITY_SHARED_FIRST_YEAR = max(
+    SUPPORTED_FIRST_YEAR,
+    PLACES_FIRST_YEAR,
+)
 
+RURALITY_SHARED_LAST_YEAR = min(
+    SUPPORTED_LAST_YEAR,
+    PLACES_LAST_YEAR,
+)
 
 class QuestionValidationError(
     ValueError
@@ -132,6 +140,18 @@ def validate_question(
     if evidence_domain == "PLACES":
         supported_first_year = PLACES_FIRST_YEAR
         supported_last_year = PLACES_LAST_YEAR
+
+    elif (
+        evidence_domain == "PLACES_IHME"
+        and classified.intent
+        is AnalysisIntent.RURALITY_COMPARISON
+    ):
+        supported_first_year = (
+            RURALITY_SHARED_FIRST_YEAR
+        )
+        supported_last_year = (
+            RURALITY_SHARED_LAST_YEAR
+        )
 
     elif evidence_domain == "PLACES_IHME":
         supported_first_year = CROSS_SOURCE_FIRST_YEAR

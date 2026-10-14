@@ -75,7 +75,33 @@ def build_analysis_plan(
     assumptions: list[str] = []
     unresolved_items: list[str] = []
 
-    if intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
+    if intent == AnalysisIntent.RURALITY_COMPARISON:
+        year = _default_year(entities)
+
+        steps.extend(
+            [
+                AnalysisStep(
+                    step_number=1,
+                    operation="places_ihme_rurality_comparison",
+                    function_name=(
+                        "get_places_ihme_rurality_comparison"
+                    ),
+                    parameters={
+                        "places_measure_id": None,
+                        "places_measurement_year": year,
+                        "ihme_cause_id": None,
+                        "ihme_year": year,
+                    },
+                    purpose=(
+                        "Compare matched CDC PLACES prevalence and "
+                        "IHME YLL-rate evidence across USDA RUCC "
+                        "rurality groups."
+                    ),
+                ),
+            ]
+        )
+
+    elif intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
         groups = _demographic_groups(entities)
         dimension = entities.get("dimension")
         year = _default_year(entities)

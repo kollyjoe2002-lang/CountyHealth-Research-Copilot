@@ -1189,12 +1189,105 @@ def _interpret_county_cause_snapshot(
     return findings
 
 
+def _interpret_places_ihme_rurality(
+    bundle: EvidenceBundle,
+) -> list[str]:
+    """
+    Interpret validated CDC PLACES + IHME evidence summarized
+    across USDA RUCC rurality groups.
+    """
+    comparison = _find_item(
+        bundle,
+        "get_places_ihme_rurality_comparison",
+    )
+
+    if comparison.empty:
+        return [
+            "No matched CDC PLACES and IHME rurality evidence "
+            "was available for the requested measure and year."
+        ]
+
+    _require_columns(
+        comparison,
+        {
+            "rurality_group",
+            "counties",
+            "mean_places_prevalence",
+            "median_places_prevalence",
+            "mean_ihme_yll_rate",
+            "median_ihme_yll_rate",
+            "places_measure_id",
+            "places_measurement_year",
+            "ihme_cause_id",
+            "ihme_year",
+            "dataset",
+        },
+        evidence_name=(
+            "CDC PLACES and IHME rurality comparison"
+        ),
+    )
+
+    findings: list[str] = []
+
+    total_counties = int(
+        comparison["counties"].sum()
+    )
+
+    findings.append(
+        "The rurality comparison included "
+        f"{total_counties:,} matched counties across "
+        f"{len(comparison)} USDA RUCC rurality groups."
+    )
+
+    for _, row in comparison.iterrows():
+        group = str(
+            row["rurality_group"]
+        )
+
+        counties = int(
+            row["counties"]
+        )
+
+        median_places = _safe_float(
+            row["median_places_prevalence"]
+        )
+
+        median_ihme = _safe_float(
+            row["median_ihme_yll_rate"]
+        )
+
+        if (
+            median_places is not None
+            and median_ihme is not None
+        ):
+            findings.append(
+                f"{group} counties (n={counties:,}) had a "
+                "median CDC PLACES age-adjusted prevalence of "
+                f"{_format_number(median_places)}% and a median "
+                "IHME YLL rate of "
+                f"{_format_number(median_ihme)}."
+            )
+
+    findings.append(
+        "CDC PLACES prevalence and IHME YLL rate are distinct "
+        "measures; differences across rurality groups are "
+        "descriptive and do not establish a causal relationship."
+    )
+
+    return findings
+
+
 def interpret_evidence(
     bundle: EvidenceBundle,
 ) -> list[str]:
     """
     Convert validated analytical evidence into deterministic findings.
     """
+    if bundle.intent == AnalysisIntent.RURALITY_COMPARISON:
+        return _interpret_places_ihme_rurality(
+            bundle
+        )
+
     if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
         return _interpret_disparity(bundle)
 
@@ -1567,15 +1660,15 @@ def build_evidence_claims(
                     "group_b_id": bundle.context.get(
                         "group_b_id"
                     ),
-"group_b_name": group_b_name,
-"year": year,
-"measure": "YLL rate",
-"units": "YLL-rate units",
-"signed_gap_definition": (
-    f"{group_a_name} minus {group_b_name}"
-),
-"signed_gap_group_a": group_a_name,
-"signed_gap_group_b": group_b_name,
+                    "group_b_name": group_b_name,
+                    "year": year,
+                    "measure": "YLL rate",
+                    "units": "YLL-rate units",
+                    "signed_gap_definition": (
+                        f"{group_a_name} minus {group_b_name}"
+                    ),
+                    "signed_gap_group_a": group_a_name,
+                    "signed_gap_group_b": group_b_name,
                 },
             )
         )
@@ -1592,7 +1685,35 @@ def build_evidence_claims(
 
         claim_id: str
 
-        if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
+        if bundle.intent == AnalysisIntent.RURALITY_COMPARISON:
+            if "matched counties" in lowered:
+                claim_id = (
+                    "rurality.counties_compared"
+                )
+
+            elif (
+                "median cdc places age-adjusted prevalence"
+                in lowered
+                and "median ihme yll rate" in lowered
+            ):
+                claim_id = (
+                    f"rurality.group_summary.{index}"
+                )
+
+            elif (
+                "distinct measures" in lowered
+                and "causal relationship" in lowered
+            ):
+                claim_id = (
+                    "rurality.interpretation_guardrail"
+                )
+
+            else:
+                claim_id = (
+                    f"rurality_comparison.finding.{index}"
+                )
+
+        elif bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
             if "complete estimates" in lowered:
                 claim_id = "disparity.counties_compared"
 
@@ -1616,7 +1737,7 @@ def build_evidence_claims(
                     f"demographic_disparity.finding.{index}"
                 )
 
-        elif bundle.intent == AnalysisIntent.TREND_COMPARISON:
+        elif bundle.intent == AnalysisIntent.RURALITY_COMPARISON:
             if "cross-source trend contained" in lowered:
                 claim_id = "trend.cross_source_observation_count"
 

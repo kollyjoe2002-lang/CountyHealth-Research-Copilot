@@ -30,6 +30,16 @@ CROSS_SOURCE_LAST_YEAR = max(
     PLACES_LAST_YEAR,
 )
 
+RURALITY_SHARED_FIRST_YEAR = max(
+    SUPPORTED_FIRST_YEAR,
+    PLACES_FIRST_YEAR,
+)
+
+RURALITY_SHARED_LAST_YEAR = min(
+    SUPPORTED_LAST_YEAR,
+    PLACES_LAST_YEAR,
+)
+
 
 def _requested_years(
     request: SemanticAnalysisRequest,
@@ -68,6 +78,16 @@ def _supported_year_bounds(
         return (
             PLACES_FIRST_YEAR,
             PLACES_LAST_YEAR,
+        )
+
+    if (
+        request.evidence_domain == "PLACES_IHME"
+        and request.intent
+        is AnalysisIntent.RURALITY_COMPARISON
+    ):
+        return (
+            RURALITY_SHARED_FIRST_YEAR,
+            RURALITY_SHARED_LAST_YEAR,
         )
 
     if request.evidence_domain == "PLACES_IHME":
@@ -205,14 +225,17 @@ def apply_request_policy(
 
     if (
         request.evidence_domain == "PLACES_IHME"
-        and request.intent is not AnalysisIntent.TREND_COMPARISON
+        and request.intent not in {
+            AnalysisIntent.TREND_COMPARISON,
+            AnalysisIntent.RURALITY_COMPARISON,
+        }
     ):
         return _reject(
             request,
-            (
+                        (
                 "Combined CDC PLACES and IHME semantic execution "
-                "is currently supported only for county trend "
-                "analysis."
+                "is currently supported for county trend analysis "
+                "and validated rurality comparison."
             ),
         )
 
@@ -257,6 +280,63 @@ def apply_request_policy(
         )
 
     assumptions: list[str] = []
+
+    # ------------------------------------------------------------
+    # Cross-source rurality comparison
+    # ------------------------------------------------------------
+
+    if request.intent is AnalysisIntent.RURALITY_COMPARISON:
+        if request.evidence_domain != "PLACES_IHME":
+            return _reject(
+                request,
+                (
+                    "Validated rurality comparison currently requires "
+                    "combined CDC PLACES and IHME evidence."
+                ),
+            )
+
+        if not request.cause_name:
+            return _clarify(
+                request,
+                (
+                    "A disease or health measure is required for "
+                    "rurality comparison."
+                ),
+                (
+                    "Which disease or health measure would you like "
+                    "to compare across rurality groups?"
+                ),
+            )
+
+        normalized = request
+
+        if normalized.year is None:
+            normalized = replace(
+                normalized,
+                year=RURALITY_SHARED_LAST_YEAR,
+            )
+
+            assumptions.append(
+                "No year was specified; EpiCounty used the latest "
+                "shared CDC PLACES and IHME year, "
+                f"{RURALITY_SHARED_LAST_YEAR}."
+            )
+
+        if normalized.geographic_scope is None:
+            normalized = replace(
+                normalized,
+                geographic_scope=NATIONAL_SCOPE,
+            )
+
+            assumptions.append(
+                "No geographic scope was specified; EpiCounty used "
+                "the United States county universe."
+            )
+
+        return _execute(
+            normalized,
+            assumptions=assumptions,
+        )
 
     # ------------------------------------------------------------
     # 3. County profile

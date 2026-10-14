@@ -1428,6 +1428,130 @@ def resolve_plan(
                 ] = analysis_year
 
         elif plan.intent == (
+            AnalysisIntent.RURALITY_COMPARISON
+        ):
+            cause = resolve_cause(
+                cause_resolution_text
+            )
+
+            places_resolution_text = (
+                _extract_places_resolution_text(
+                    question_text
+                )
+            )
+
+            places_measure = resolve_places_measure(
+                places_resolution_text
+            )
+
+            validate_places_ihme_pair(
+                places_measure,
+                cause,
+            )
+
+            analysis_year: int | None = None
+
+            for step in plan.steps:
+                if (
+                    step.operation
+                    == "places_ihme_rurality_comparison"
+                ):
+                    step.parameters.update(
+                        {
+                            "places_measure_id": (
+                                places_measure[
+                                    "measure_id"
+                                ]
+                            ),
+                            "ihme_cause_id": cause[
+                                "cause_id"
+                            ],
+                        }
+                    )
+
+                    places_year = step.parameters.get(
+                        "places_measurement_year"
+                    )
+
+                    ihme_year = step.parameters.get(
+                        "ihme_year"
+                    )
+
+                    if (
+                        places_year is not None
+                        and ihme_year is not None
+                    ):
+                        if int(places_year) != int(ihme_year):
+                            raise ResolutionError(
+                                "Validated rurality comparison "
+                                "requires the CDC PLACES measurement "
+                                "year and IHME year to match."
+                            )
+
+                        analysis_year = int(
+                            places_year
+                        )
+
+            plan.assumptions.append(
+                "Resolved CDC PLACES measure: "
+                f"{places_measure['measure_name']} "
+                f"({places_measure['measure_id']})."
+            )
+
+            plan.assumptions.append(
+                "Resolved IHME cause: "
+                f"{cause['cause_name']}."
+            )
+
+            plan.resolved_context.update(
+                {
+                    "places_measure_id": (
+                        places_measure[
+                            "measure_id"
+                        ]
+                    ),
+                    "places_measure_name": (
+                        places_measure[
+                            "measure_name"
+                        ]
+                    ),
+                    "places_measure_category": (
+                        places_measure[
+                            "category"
+                        ]
+                    ),
+                    "places_measure_unit": (
+                        places_measure[
+                            "unit"
+                        ]
+                    ),
+                    "cause_id": cause[
+                        "cause_id"
+                    ],
+                    "cause_name": cause[
+                        "cause_name"
+                    ],
+                    "geographic_scope": (
+                        "United States"
+                    ),
+                    "rurality_classification": (
+                        "USDA RUCC 2023"
+                    ),
+                }
+            )
+
+            if analysis_year is not None:
+                plan.resolved_context[
+                    "year"
+                ] = analysis_year
+                plan.resolved_context[
+                    "places_measurement_year"
+                ] = analysis_year
+                plan.resolved_context[
+                    "ihme_year"
+                ] = analysis_year
+
+        elif plan.intent == (
             AnalysisIntent.TREND_COMPARISON
         ):
             county = resolve_county(

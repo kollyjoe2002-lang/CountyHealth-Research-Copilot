@@ -22,6 +22,7 @@ from app.data_access import (
     get_long_term_change,
     get_places_county_measure_trend,
     get_places_ihme_county_trend_context,
+    get_places_ihme_rurality_comparison,
     get_top_causes,
 )
 
@@ -43,6 +44,9 @@ APPROVED_FUNCTIONS: dict[str, Callable[..., pd.DataFrame]] = {
     ),
     "get_places_ihme_county_trend_context": (
         get_places_ihme_county_trend_context
+    ),
+    "get_places_ihme_rurality_comparison": (
+        get_places_ihme_rurality_comparison
     ),
 }
 

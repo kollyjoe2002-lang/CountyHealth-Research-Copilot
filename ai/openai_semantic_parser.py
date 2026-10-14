@@ -174,6 +174,12 @@ especially within a named county.
 demographic_disparity:
 Comparison of disease burden between demographic groups.
 
+rurality_comparison:
+Comparison of health measures or disease burden across rurality
+groups such as metro, nonmetro adjacent, and nonmetro not adjacent.
+Use this intent when the user asks how PLACES prevalence and/or IHME
+burden differ by rurality, rural-urban status, metro status, or USDA RUCC.
+
 county_ranking:
 Questions asking which counties have the highest, lowest,
 most, least, or otherwise ranked disease burden.
@@ -224,6 +230,9 @@ is county_cause_snapshot.
 "How has breast cancer changed in Milwaukee County?"
 is trend_comparison.
 
+"How do CDC PLACES diabetes prevalence and IHME diabetes burden differ by rurality?"
+is rurality_comparison.
+
 "Which counties have the highest breast cancer burden?"
 is county_ranking.
 
@@ -246,6 +255,9 @@ uses evidence_domain = "PLACES".
 
 "How does CDC PLACES diabetes prevalence relate to IHME diabetes
 burden in Milwaukee County?"
+uses evidence_domain = "PLACES_IHME".
+
+"Compare CDC PLACES diabetes prevalence and IHME diabetes burden across rural and metro counties"
 uses evidence_domain = "PLACES_IHME".
 
 "How has diabetes changed in Milwaukee County?"
