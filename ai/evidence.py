@@ -1277,6 +1277,149 @@ def _interpret_places_ihme_rurality(
     return findings
 
 
+def _interpret_places_ihme_disparity(
+    bundle: EvidenceBundle,
+) -> list[str]:
+    """
+    Interpret CDC PLACES county prevalence context alongside
+    IHME demographic YLL disparity evidence.
+
+    PLACES prevalence is contextual county-level evidence.
+    IHME provides the demographic disparity itself.
+    """
+    context = _find_item(
+        bundle,
+        "get_places_ihme_demographic_disparity_context",
+    )
+
+    if context.empty:
+        return [
+            "No matched CDC PLACES and IHME demographic disparity "
+            "evidence was available for the requested comparison."
+        ]
+
+    _require_columns(
+        context,
+        {
+            "fips",
+            "ihme_location_name",
+            "places_measure_id",
+            "places_measure_name",
+            "places_measurement_year",
+            "places_age_adjusted_prevalence",
+            "places_ci_lower",
+            "places_ci_upper",
+            "group_a_yll_rate",
+            "group_b_yll_rate",
+            "signed_yll_gap",
+            "yll_gap_magnitude",
+            "relative_gap_percent",
+            "disparity_direction",
+            "intervals_overlap",
+            "ihme_cause_id",
+            "ihme_year",
+            "ihme_dimension",
+            "group_a",
+            "group_b",
+            "dataset",
+        },
+        evidence_name=(
+            "CDC PLACES and IHME demographic disparity context"
+        ),
+    )
+
+    context["signed_yll_gap"] = pd.to_numeric(
+        context["signed_yll_gap"],
+        errors="coerce",
+    )
+
+    context["places_age_adjusted_prevalence"] = pd.to_numeric(
+        context["places_age_adjusted_prevalence"],
+        errors="coerce",
+    )
+
+    context = context.dropna(
+        subset=[
+            "ihme_location_name",
+            "signed_yll_gap",
+            "places_age_adjusted_prevalence",
+        ]
+    ).copy()
+
+    if context.empty:
+        return [
+            "No matched counties had usable CDC PLACES prevalence "
+            "and IHME demographic disparity estimates."
+        ]
+
+    group_a_name = str(
+        bundle.context.get(
+            "group_a_name",
+            "Group A",
+        )
+    )
+
+    group_b_name = str(
+        bundle.context.get(
+            "group_b_name",
+            "Group B",
+        )
+    )
+
+    positive = context.loc[
+        context["signed_yll_gap"] > 0
+    ]
+
+    negative = context.loc[
+        context["signed_yll_gap"] < 0
+    ]
+
+    equal = context.loc[
+        context["signed_yll_gap"] == 0
+    ]
+
+    findings = [
+        (
+            f"{len(context):,} counties had matched CDC PLACES "
+            "prevalence context and IHME demographic disparity "
+            "estimates."
+        ),
+        (
+            "Across the matched counties, the median CDC PLACES "
+            "age-adjusted prevalence was "
+            f"{_format_number(context['places_age_adjusted_prevalence'].median())}%."
+        ),
+        (
+            "The median signed IHME demographic disparity gap, "
+            f"defined as {group_a_name} minus {group_b_name}, was "
+            f"{_format_number(context['signed_yll_gap'].median())} "
+            "YLL-rate units."
+        ),
+        (
+            f"{group_a_name} had the higher estimated IHME YLL rate "
+            f"in {len(positive):,} counties, while {group_b_name} "
+            f"had the higher estimated IHME YLL rate in "
+            f"{len(negative):,} counties."
+        ),
+    ]
+
+    if not equal.empty:
+        findings.append(
+            f"{group_a_name} and {group_b_name} had equal estimated "
+            f"IHME YLL rates in {len(equal):,} counties."
+        )
+
+    findings.append(
+        "CDC PLACES prevalence is contextual county-level evidence "
+        "and does not represent the demographic disparity itself; "
+        "the demographic disparity is derived from IHME YLL rates. "
+        "The cross-source comparison is descriptive and does not "
+        "establish a causal relationship."
+    )
+
+    return findings
+
+
 def interpret_evidence(
     bundle: EvidenceBundle,
 ) -> list[str]:
@@ -1289,6 +1432,14 @@ def interpret_evidence(
         )
 
     if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
+        if (
+            bundle.context.get("evidence_domain")
+            == "PLACES_IHME"
+        ):
+            return _interpret_places_ihme_disparity(
+                bundle
+            )
+
         return _interpret_disparity(bundle)
 
     if bundle.intent == AnalysisIntent.COUNTY_CAUSE_SNAPSHOT:
@@ -1628,18 +1779,46 @@ def build_evidence_claims(
             "year"
         )
 
-        context_text = (
-            f"The disparity analysis compares {group_a_name} "
-            f"with {group_b_name} for {cause_name} "
-            f"by {dimension}, using county-level YLL rates"
-        )
-
-        if year is not None:
-            context_text += (
-                f" in {year}."
+        if (
+            bundle.context.get("evidence_domain")
+            == "PLACES_IHME"
+        ):
+            places_measure_name = str(
+                bundle.context.get(
+                    "places_measure_name",
+                    "the selected CDC PLACES measure",
+                )
             )
+
+            places_measurement_year = bundle.context.get(
+                "places_measurement_year"
+            )
+
+            ihme_year = bundle.context.get("ihme_year")
+
+            context_text = (
+                f"The cross-source disparity analysis compares "
+                f"{group_a_name} with {group_b_name} for "
+                f"{cause_name} by {dimension}. "
+                f"IHME supplies the county-level demographic YLL "
+                f"disparity for {ihme_year}, while CDC PLACES "
+                f"{places_measure_name} is retained separately as "
+                f"county prevalence context for measurement year "
+                f"{places_measurement_year}."
+            )
+
         else:
-            context_text += "."
+            context_text = (
+                f"The disparity analysis compares {group_a_name} "
+                f"with {group_b_name} for {cause_name} "
+                f"by {dimension}, using county-level YLL rates"
+            )
+
+        if bundle.context.get("evidence_domain") != "PLACES_IHME":
+            if year is not None:
+                context_text += f" in {year}."
+            else:
+                context_text += "."
 
         context_claims.append(
             EvidenceClaim(
@@ -1667,6 +1846,21 @@ def build_evidence_claims(
                     "signed_gap_definition": (
                         f"{group_a_name} minus {group_b_name}"
                     ),
+                    "evidence_domain": bundle.context.get(
+    "evidence_domain"
+),
+"places_measure_id": bundle.context.get(
+    "places_measure_id"
+),
+"places_measure_name": bundle.context.get(
+    "places_measure_name"
+),
+"places_measurement_year": bundle.context.get(
+    "places_measurement_year"
+),
+"ihme_year": bundle.context.get(
+    "ihme_year"
+),
                     "signed_gap_group_a": group_a_name,
                     "signed_gap_group_b": group_b_name,
                 },
@@ -1714,7 +1908,34 @@ def build_evidence_claims(
                 )
 
         elif bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
-            if "complete estimates" in lowered:
+            if (
+                bundle.context.get("evidence_domain")
+                == "PLACES_IHME"
+            ):
+                if "matched cdc places prevalence context" in lowered:
+                    claim_id = "disparity.cross_source_counties"
+
+                elif "median cdc places age-adjusted prevalence" in lowered:
+                    claim_id = "disparity.places_prevalence_context"
+
+                elif "median signed ihme demographic disparity gap" in lowered:
+                    claim_id = "disparity.ihme_median_gap"
+
+                elif "higher estimated ihme yll rate" in lowered:
+                    claim_id = "disparity.ihme_direction_counts"
+
+                elif (
+                    "contextual county-level evidence" in lowered
+                    and "causal relationship" in lowered
+                ):
+                    claim_id = "disparity.cross_source_guardrail"
+
+                else:
+                    claim_id = (
+                        f"demographic_disparity.cross_source.finding.{index}"
+                    )
+
+            elif "complete estimates" in lowered:
                 claim_id = "disparity.counties_compared"
 
             elif "median signed disparity gap" in lowered:
@@ -1737,7 +1958,7 @@ def build_evidence_claims(
                     f"demographic_disparity.finding.{index}"
                 )
 
-        elif bundle.intent == AnalysisIntent.RURALITY_COMPARISON:
+        elif bundle.intent == AnalysisIntent.TREND_COMPARISON:
             if "cross-source trend contained" in lowered:
                 claim_id = "trend.cross_source_observation_count"
 

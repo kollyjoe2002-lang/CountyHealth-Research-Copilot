@@ -23,6 +23,7 @@ from app.data_access import (
     get_places_county_measure_trend,
     get_places_ihme_county_trend_context,
     get_places_ihme_rurality_comparison,
+    get_places_ihme_demographic_disparity_context,
     get_top_causes,
 )
 
@@ -47,6 +48,9 @@ APPROVED_FUNCTIONS: dict[str, Callable[..., pd.DataFrame]] = {
     ),
     "get_places_ihme_rurality_comparison": (
         get_places_ihme_rurality_comparison
+    ),
+        "get_places_ihme_demographic_disparity_context": (
+        get_places_ihme_demographic_disparity_context
     ),
 }
 
@@ -230,6 +234,9 @@ def _evidence_title(
 ),
         "restrict_measurement_year": (
             "CDC PLACES county prevalence snapshot"
+        ),
+            "places_ihme_demographic_disparity_context": (
+            "CDC PLACES and IHME demographic disparity context"
         ),
     }
 

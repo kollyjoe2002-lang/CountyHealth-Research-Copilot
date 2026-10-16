@@ -129,48 +129,101 @@ def build_analysis_plan(
                 "The demographic comparison dimension is unresolved."
             )
 
-        steps.extend(
-            [
-                AnalysisStep(
-                    step_number=1,
-                    operation="resolve_cause",
-                    function_name="get_disparity_causes",
-                    parameters={},
-                    purpose=(
-                        "Resolve the requested disease or cause "
-                        "against the validated cause lookup."
+        if evidence_domain == "PLACES_IHME":
+            steps.extend(
+                [
+                    AnalysisStep(
+                        step_number=1,
+                        operation="resolve_cause",
+                        function_name="get_disparity_causes",
+                        parameters={},
+                        purpose=(
+                            "Resolve the requested disease or cause "
+                            "against the validated cause lookup."
+                        ),
                     ),
-                ),
-                AnalysisStep(
-                    step_number=2,
-                    operation="resolve_groups",
-                    function_name="get_disparity_groups",
-                    parameters={
-                        "dimension": dimension,
-                    },
-                    purpose=(
-                        "Resolve the requested demographic groups "
-                        "against the validated group lookup."
+                    AnalysisStep(
+                        step_number=2,
+                        operation="resolve_groups",
+                        function_name="get_disparity_groups",
+                        parameters={
+                            "dimension": dimension,
+                        },
+                        purpose=(
+                            "Resolve the requested demographic groups "
+                            "against the validated group lookup."
+                        ),
                     ),
-                ),
-                AnalysisStep(
-                    step_number=3,
-                    operation="county_disparity_ranking",
-                    function_name="get_county_disparity_ranking",
-                    parameters={
-                        "cause_id": None,
-                        "year": year,
-                        "dimension": dimension,
-                        "group_a_id": None,
-                        "group_b_id": None,
-                    },
-                    purpose=(
-                        "Calculate county-level signed and relative "
-                        "disparity estimates."
+                    AnalysisStep(
+                        step_number=3,
+                        operation=(
+                            "places_ihme_demographic_disparity_context"
+                        ),
+                        function_name=(
+                            "get_places_ihme_demographic_disparity_context"
+                        ),
+                        parameters={
+                            "dimension": dimension,
+                            "group_a_id": None,
+                            "group_b_id": None,
+                            "places_measure_id": None,
+                            "places_measurement_year": year,
+                            "ihme_cause_id": None,
+                            "ihme_year": year,
+                        },
+                        purpose=(
+                            "Combine canonical CDC PLACES prevalence "
+                            "context with IHME demographic YLL disparity "
+                            "while preserving the evidence systems "
+                            "separately."
+                        ),
                     ),
-                ),
-            ]
-        )
+                ]
+            )
+
+        else:
+            steps.extend(
+                [
+                    AnalysisStep(
+                        step_number=1,
+                        operation="resolve_cause",
+                        function_name="get_disparity_causes",
+                        parameters={},
+                        purpose=(
+                            "Resolve the requested disease or cause "
+                            "against the validated cause lookup."
+                        ),
+                    ),
+                    AnalysisStep(
+                        step_number=2,
+                        operation="resolve_groups",
+                        function_name="get_disparity_groups",
+                        parameters={
+                            "dimension": dimension,
+                        },
+                        purpose=(
+                            "Resolve the requested demographic groups "
+                            "against the validated group lookup."
+                        ),
+                    ),
+                    AnalysisStep(
+                        step_number=3,
+                        operation="county_disparity_ranking",
+                        function_name="get_county_disparity_ranking",
+                        parameters={
+                            "cause_id": None,
+                            "year": year,
+                            "dimension": dimension,
+                            "group_a_id": None,
+                            "group_b_id": None,
+                        },
+                        purpose=(
+                            "Calculate county-level signed and relative "
+                            "disparity estimates."
+                        ),
+                    ),
+                ]
+            )
 
     elif intent == AnalysisIntent.TREND_COMPARISON:
         first_year, last_year = _year_range(

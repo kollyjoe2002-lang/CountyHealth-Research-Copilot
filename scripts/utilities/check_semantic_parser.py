@@ -195,6 +195,46 @@ CASES = [
         expect_county=True,
         expect_cause=True,
     ),
+    SemanticCase(
+        "S23",
+        (
+            "Compare CDC PLACES diabetes prevalence with the "
+            "Black-White IHME type 2 diabetes YLL disparity "
+            "across U.S. counties in 2019."
+        ),
+        AnalysisIntent.DEMOGRAPHIC_DISPARITY,
+        expected_dimension="Race / ethnicity",
+        expected_evidence_domain="PLACES_IHME",
+        expected_year=2019,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S24",
+        (
+            "Compare CDC PLACES stroke prevalence with the "
+            "Male-Female IHME stroke YLL disparity across "
+            "U.S. counties in 2019."
+        ),
+        AnalysisIntent.DEMOGRAPHIC_DISPARITY,
+        expected_dimension="Sex",
+        expected_evidence_domain="PLACES_IHME",
+        expected_year=2019,
+        expect_cause=True,
+    ),
+    SemanticCase(
+        "S25",
+        (
+            "Compare CDC PLACES diabetes prevalence with the "
+            "IHME type 2 diabetes YLL disparity between ages "
+            "60 to 64 and ages 80 to 84 across U.S. counties "
+            "in 2019."
+        ),
+        AnalysisIntent.DEMOGRAPHIC_DISPARITY,
+        expected_dimension="Age group",
+        expected_evidence_domain="PLACES_IHME",
+        expected_year=2019,
+        expect_cause=True,
+    ),
 ]
 
 

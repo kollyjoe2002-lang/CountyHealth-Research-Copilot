@@ -82,8 +82,10 @@ def _supported_year_bounds(
 
     if (
         request.evidence_domain == "PLACES_IHME"
-        and request.intent
-        is AnalysisIntent.RURALITY_COMPARISON
+        and request.intent in {
+            AnalysisIntent.RURALITY_COMPARISON,
+            AnalysisIntent.DEMOGRAPHIC_DISPARITY,
+        }
     ):
         return (
             RURALITY_SHARED_FIRST_YEAR,
@@ -228,14 +230,16 @@ def apply_request_policy(
         and request.intent not in {
             AnalysisIntent.TREND_COMPARISON,
             AnalysisIntent.RURALITY_COMPARISON,
+            AnalysisIntent.DEMOGRAPHIC_DISPARITY,
         }
     ):
         return _reject(
             request,
-                        (
+                                    (
                 "Combined CDC PLACES and IHME semantic execution "
-                "is currently supported for county trend analysis "
-                "and validated rurality comparison."
+                "is currently supported for county trend analysis, "
+                "validated rurality comparison, and validated "
+                "demographic disparity comparison."
             ),
         )
 
@@ -532,14 +536,20 @@ def apply_request_policy(
         normalized = request
 
         if normalized.year is None:
+            default_year = (
+                RURALITY_SHARED_LAST_YEAR
+                if normalized.evidence_domain == "PLACES_IHME"
+                else SUPPORTED_LAST_YEAR
+            )
+
             normalized = replace(
                 normalized,
-                year=SUPPORTED_LAST_YEAR,
+                year=default_year,
             )
 
             assumptions.append(
                 "No year was specified; EpiCounty used the "
-                f"latest available year, {SUPPORTED_LAST_YEAR}."
+                f"latest available year, {default_year}."
             )
 
         if normalized.geographic_scope is None:

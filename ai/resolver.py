@@ -1126,6 +1126,33 @@ def resolve_plan(
                 )
             )
 
+            evidence_domain = (
+                plan.resolved_context.get(
+                    "evidence_domain"
+                )
+            )
+
+            places_measure: dict[
+                str,
+                Any,
+            ] | None = None
+
+            if evidence_domain == "PLACES_IHME":
+                places_resolution_text = (
+                    _extract_places_resolution_text(
+                        question_text
+                    )
+                )
+
+                places_measure = resolve_places_measure(
+                    places_resolution_text
+                )
+
+                validate_places_ihme_pair(
+                    places_measure,
+                    cause,
+                )
+
             analysis_year: int | None = None
 
             for step in plan.steps:
@@ -1136,6 +1163,49 @@ def resolve_plan(
                     step.parameters[
                         "dimension"
                     ] = groups["dimension"]
+                elif (
+                    step.operation
+                    == "places_ihme_demographic_disparity_context"
+                ):
+                    if places_measure is None:
+                        raise ResolutionError(
+                            "CDC PLACES measure resolution is required "
+                            "for PLACES_IHME demographic disparity."
+                        )
+
+                    step.parameters.update(
+                        {
+                            "dimension": groups["dimension"],
+                            "group_a_id": groups["group_a_id"],
+                            "group_b_id": groups["group_b_id"],
+                            "places_measure_id": places_measure[
+                                "measure_id"
+                            ],
+                            "ihme_cause_id": cause["cause_id"],
+                        }
+                    )
+
+                    places_year = step.parameters.get(
+                        "places_measurement_year"
+                    )
+                    ihme_year = step.parameters.get(
+                        "ihme_year"
+                    )
+
+                    if (
+                        places_year is not None
+                        and ihme_year is not None
+                    ):
+                        if int(places_year) != int(ihme_year):
+                            raise ResolutionError(
+                                "Validated demographic disparity "
+                                "context requires the CDC PLACES "
+                                "measurement year and IHME year to match."
+                            )
+
+                        analysis_year = int(
+                            places_year
+                        )
 
                 elif (
                     step.operation
@@ -1207,6 +1277,39 @@ def resolve_plan(
                 plan.resolved_context[
                     "year"
                 ] = analysis_year
+
+            if places_measure is not None:
+                plan.resolved_context.update(
+                    {
+                        "places_measure_id": (
+                            places_measure["measure_id"]
+                        ),
+                        "places_measure_name": (
+                            places_measure["measure_name"]
+                        ),
+                        "places_measure_category": (
+                            places_measure["category"]
+                        ),
+                        "places_measure_unit": (
+                            places_measure["unit"]
+                        ),
+                    }
+                )
+
+                if analysis_year is not None:
+                    plan.resolved_context[
+                        "places_measurement_year"
+                    ] = analysis_year
+
+                    plan.resolved_context[
+                        "ihme_year"
+                    ] = analysis_year
+
+                plan.assumptions.append(
+                    "Resolved CDC PLACES measure: "
+                    f"{places_measure['measure_name']} "
+                    f"({places_measure['measure_id']})."
+                )
 
         elif plan.intent == (
             AnalysisIntent.COUNTY_PROFILE
