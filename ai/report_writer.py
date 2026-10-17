@@ -33,6 +33,89 @@ def _report_title(
 def _methods_text(
     bundle: EvidenceBundle,
 ) -> str:
+    evidence_domain = str(
+        bundle.context.get(
+            "evidence_domain",
+            "IHME",
+        )
+    )
+
+    if evidence_domain == "PLACES":
+        return (
+            "The analysis used validated CDC PLACES county-level "
+            "modeled prevalence estimates. PLACES estimates are "
+            "derived from BRFSS and related data using small-area "
+            "estimation methods. The analysis uses the underlying "
+            "measurement year as the analytical year and retains "
+            "the PLACES release year as separate provenance metadata."
+        )
+
+    if evidence_domain == "PLACES_IHME":
+        if bundle.intent == AnalysisIntent.TREND_COMPARISON:
+            return (
+                "The analysis compared CDC PLACES modeled county-level "
+                "prevalence estimates with IHME county-level "
+                "years-of-life-lost rates over the requested period. "
+                "PLACES prevalence and IHME YLL burden were retained "
+                "as distinct measures and were not combined into a "
+                "single metric. Same-year comparisons were made only "
+                "where both sources contained evidence for the same "
+                "analysis year."
+            )
+
+        if bundle.intent == AnalysisIntent.RURALITY_COMPARISON:
+            return (
+                "The analysis compared county groups defined using "
+                "USDA Rural-Urban Continuum Codes with CDC PLACES "
+                "modeled prevalence estimates and IHME county-level "
+                "years-of-life-lost rates. PLACES prevalence and "
+                "IHME YLL burden were summarized separately within "
+                "each rurality group and were not combined into a "
+                "single measure."
+            )
+
+        if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
+            group_a_name = str(
+                bundle.context.get(
+                    "group_a_name",
+                    "Group A",
+                )
+            )
+
+            group_b_name = str(
+                bundle.context.get(
+                    "group_b_name",
+                    "Group B",
+                )
+            )
+
+            dimension = str(
+                bundle.context.get(
+                    "dimension",
+                    "demographic group",
+                )
+            )
+
+            return (
+                "CDC PLACES county-level prevalence was used as "
+                "population-health context, while demographic "
+                "disparity estimates were derived from IHME "
+                "years-of-life-lost rates. "
+                f"The IHME analysis compared {group_a_name} with "
+                f"{group_b_name} across the {dimension} dimension. "
+                f"The signed disparity gap was calculated as the "
+                f"{group_a_name} rate minus the {group_b_name} rate. "
+                "The PLACES prevalence estimate itself was not "
+                "interpreted as a demographic disparity measure."
+            )
+
+        return (
+            "The analysis used validated CDC PLACES and IHME "
+            "county-level evidence. Measures from the two sources "
+            "were retained separately and interpreted according "
+            "to their source-specific definitions."
+        )
+
     if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
         group_a_name = str(
             bundle.context.get(
@@ -114,17 +197,53 @@ def _limitations(
         ),
     ]
 
-    evidence_domain = bundle.context.get(
-        "evidence_domain"
+    evidence_domain = str(
+        bundle.context.get(
+            "evidence_domain",
+            "IHME",
+        )
     )
 
     if evidence_domain == "PLACES":
-        limitations.append(
-            "CDC PLACES estimates are modeled prevalence estimates "
-            "derived from BRFSS and related data sources; the "
-            "measurement year should be distinguished from the "
-            "PLACES release year."
+        limitations.extend(
+            [
+                (
+                    "CDC PLACES values are modeled prevalence "
+                    "estimates rather than direct county survey "
+                    "estimates."
+                ),
+                (
+                    "The BRFSS measurement year should be "
+                    "distinguished from the CDC PLACES release year."
+                ),
+            ]
         )
+
+    elif evidence_domain == "PLACES_IHME":
+        limitations.extend(
+            [
+                (
+                    "CDC PLACES prevalence and IHME YLL burden are "
+                    "different epidemiological measures and should "
+                    "not be interpreted as interchangeable."
+                ),
+                (
+                    "CDC PLACES measurement years should be "
+                    "distinguished from PLACES release years."
+                ),
+                (
+                    "Cross-source comparisons are descriptive and "
+                    "do not establish that differences in PLACES "
+                    "prevalence caused differences in IHME burden."
+                ),
+                (
+                    "IHME burden estimates should be interpreted "
+                    "with their reported uncertainty and original "
+                    "data-release documentation."
+                ),
+            ]
+        )
+
     else:
         limitations.append(
             "The analysis should be interpreted alongside the original "

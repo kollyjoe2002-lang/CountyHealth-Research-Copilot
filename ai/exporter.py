@@ -21,7 +21,7 @@ from ai.figures import (
     FigureGenerationError,
     export_evidence_figure_png,
 )
-from ai.models import ResearchReport
+from ai.models import AnalysisIntent, ResearchReport
 from ai.report_writer import report_to_markdown
 
 
@@ -628,6 +628,63 @@ def _add_research_figure(
     return True
 
 
+def _data_source_note(
+    report: ResearchReport,
+) -> str:
+    """
+    Return a source-aware data and interpretation note.
+    """
+    evidence_domain = str(
+        report.evidence.context.get(
+            "evidence_domain",
+            "IHME",
+        )
+    )
+
+    if evidence_domain == "PLACES":
+        return (
+            "This report uses CDC PLACES county-level modeled "
+            "prevalence estimates incorporated into the local "
+            "CountyHealth DuckDB warehouse. PLACES estimates should "
+            "be interpreted using their BRFSS measurement year, "
+            "while the PLACES release year is retained separately "
+            "for provenance. Users should consult the original CDC "
+            "PLACES documentation for authoritative methodological "
+            "and citation guidance."
+        )
+
+    if evidence_domain == "PLACES_IHME":
+        if report.evidence.intent == AnalysisIntent.RURALITY_COMPARISON:
+            return (
+                "This report uses CDC PLACES modeled prevalence "
+                "estimates, IHME county-level burden estimates, "
+                "and USDA Rural-Urban Continuum Codes incorporated "
+                "into the local CountyHealth DuckDB warehouse. "
+                "PLACES prevalence and IHME YLL burden are distinct "
+                "measures and should be interpreted separately. "
+                "Users should consult the original CDC PLACES, IHME, "
+                "and USDA documentation for authoritative "
+                "methodological and citation guidance."
+            )
+
+        return (
+            "This report uses CDC PLACES modeled prevalence estimates "
+            "and IHME county-level burden estimates incorporated into "
+            "the local CountyHealth DuckDB warehouse. PLACES "
+            "prevalence and IHME YLL burden are distinct measures "
+            "and should be interpreted separately. Users should "
+            "consult the original CDC PLACES and IHME documentation "
+            "for authoritative methodological and citation guidance."
+        )
+
+    return (
+        "This report is based on IHME-derived county-level estimates "
+        "incorporated into the local CountyHealth DuckDB warehouse. "
+        "Users should consult the original IHME documentation for "
+        "authoritative methodological and citation guidance."
+    )
+
+
 def build_docx_document(
     report: ResearchReport,
     *,
@@ -830,12 +887,7 @@ def build_docx_document(
     )
 
     document.add_paragraph(
-        "The report is based on IHME-derived "
-        "county-level estimates incorporated into "
-        "the local CountyHealth DuckDB warehouse. "
-        "Users should consult the original IHME "
-        "documentation for authoritative methodological "
-        "and citation guidance."
+        _data_source_note(report)
     )
 
     return document
