@@ -12,6 +12,7 @@ from ai.planner import build_analysis_plan
 from ai.resolver import resolve_plan
 from ai.semantic_entailment import (
     SemanticEntailmentError,
+    _extract_numbers,
     validate_semantic_entailment,
 )
 
@@ -116,6 +117,22 @@ def main() -> None:
     )
 
     print("Valid evidence-supported paraphrase: PASS")
+
+    lexical_numbers = _extract_numbers(
+        "Diabetes mellitus type 2 had a YLL rate of 42.20 in 2019."
+    )
+
+    if lexical_numbers != [
+        (42.20, False),
+        (2019.0, False),
+    ]:
+        raise AssertionError(
+            "Numbers used in categorical labels such as "
+            "'type 2' were not excluded correctly: "
+            f"{lexical_numbers}"
+        )
+
+    print("Categorical 'type 2' numeric label excluded: PASS")
 
     wrong_number = InterpretationResult(
         direct_answer=GroundedAnswer(

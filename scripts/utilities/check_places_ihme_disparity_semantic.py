@@ -156,6 +156,7 @@ def run_case(case: Case) -> bool:
 
     if interpretation_input is None:
         print("FAIL: missing interpretation input")
+        print("AI ERROR:", outcome.ai_error)
         return False
 
     claim_ids = {

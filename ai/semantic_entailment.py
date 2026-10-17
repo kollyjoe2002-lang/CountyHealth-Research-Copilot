@@ -61,11 +61,14 @@ def _extract_numbers(
     text: str,
 ) -> list[tuple[float, bool]]:
     """
-    Extract numeric values and whether they were percentages.
+    Extract quantitative numeric values and whether they were
+    percentages.
 
-    Commas are removed and values are converted to floats.
+    Numbers used as categorical labels such as "type 2" are excluded
+    from quantitative grounding checks. Commas are removed and
+    remaining values are converted to floats.
     """
-    matches = re.findall(
+    matches = re.finditer(
         r"-?\d[\d,]*(?:\.\d+)?%?",
         text,
     )
@@ -73,10 +76,24 @@ def _extract_numbers(
     numbers: list[tuple[float, bool]] = []
 
     for match in matches:
-        is_percent = match.endswith("%")
+        prefix = text[
+            max(0, match.start() - 12):
+            match.start()
+        ]
+
+        if re.search(
+            r"\btype\s+$",
+            prefix,
+            flags=re.IGNORECASE,
+        ):
+            continue
+
+        matched_text = match.group(0)
+
+        is_percent = matched_text.endswith("%")
 
         cleaned = (
-            match.replace(",", "")
+            matched_text.replace(",", "")
             .removesuffix("%")
         )
 
