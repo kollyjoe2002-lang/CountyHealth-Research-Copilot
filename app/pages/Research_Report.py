@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from ai.exporter import (
     ReportExportError,
+    _data_source_note,
     default_report_filename,
     export_docx_bytes,
     export_markdown_bytes,
@@ -643,8 +644,10 @@ def display_report() -> None:
     )
 
     st.write(
-        "This report was generated from validated "
-        "CountyHealth Research Copilot analytics. "
+        _data_source_note(report)
+    )
+
+    st.caption(
         "The execution plan, source functions, parameters, "
         "and evidence tables are available below."
     )
