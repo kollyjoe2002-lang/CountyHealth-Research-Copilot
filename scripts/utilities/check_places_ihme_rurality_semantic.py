@@ -217,6 +217,24 @@ cases = [
         ),
         "clarify",
     ),
+    (
+        "R05 missing disease or health measure",
+        SemanticAnalysisRequest(
+            question=ResearchQuestion(
+                raw_text=(
+                    "Compare CDC PLACES prevalence and IHME burden "
+                    "across rurality groups in 2019."
+                )
+            ),
+            intent=AnalysisIntent.RURALITY_COMPARISON,
+            confidence=0.99,
+            cause_name=None,
+            year=2019,
+            geographic_scope="United States",
+            evidence_domain="PLACES_IHME",
+        ),
+        "clarify",
+    ),
 ]
 
 passed = 0

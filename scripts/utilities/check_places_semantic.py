@@ -94,6 +94,26 @@ def _run_case(
             )
 
         return True, "PASS: unsupported breast-cancer mapping blocked"
+    if case_id in {"P06", "P07"}:
+        if outcome.status != "clarify":
+            return (
+                False,
+                f"Expected clarification, got {outcome.status}.",
+            )
+
+        if outcome.evidence_bundle is not None:
+            return (
+                False,
+                f"{case_id} unexpectedly produced analytical evidence.",
+            )
+
+        if not outcome.clarification_question:
+            return (
+                False,
+                f"{case_id} did not return a clarification question.",
+            )
+
+        return True, "PASS: missing required entity safely clarified"
 
     # ------------------------------------------------------------
     # P01 / P02: supported PLACES county prevalence snapshots
@@ -365,6 +385,49 @@ def main() -> None:
                 explanation=(
                     "Breast cancer is not an approved PLACES "
                     "measure alias."
+                ),
+            ),
+        ),
+        (
+            "P06",
+            "PLACES snapshot missing county",
+            SemanticAnalysisRequest(
+                question=ResearchQuestion(
+                    raw_text=(
+                        "What was the CDC PLACES diabetes prevalence "
+                        "in 2023?"
+                    )
+                ),
+                intent=AnalysisIntent.COUNTY_CAUSE_SNAPSHOT,
+                confidence=1.0,
+                county_name=None,
+                cause_name="diabetes",
+                year=2023,
+                evidence_domain="PLACES",
+                explanation=(
+                    "CDC PLACES snapshot missing required county."
+                ),
+            ),
+        ),
+        (
+            "P07",
+            "PLACES snapshot missing disease or health measure",
+            SemanticAnalysisRequest(
+                question=ResearchQuestion(
+                    raw_text=(
+                        "What was the CDC PLACES prevalence "
+                        "in Milwaukee County, Wisconsin in 2023?"
+                    )
+                ),
+                intent=AnalysisIntent.COUNTY_CAUSE_SNAPSHOT,
+                confidence=1.0,
+                county_name="Milwaukee County, Wisconsin",
+                cause_name=None,
+                year=2023,
+                evidence_domain="PLACES",
+                explanation=(
+                    "CDC PLACES snapshot missing required "
+                    "disease or health measure."
                 ),
             ),
         ),

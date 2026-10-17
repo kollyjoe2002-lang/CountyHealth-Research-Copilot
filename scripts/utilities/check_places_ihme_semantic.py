@@ -78,6 +78,27 @@ def _run_case(
             )
 
         return True, "PASS: incompatible pair blocked"
+
+    if case_id in {"P07", "P08"}:
+        if outcome.status != "clarify":
+            return (
+                False,
+                f"Expected clarification, got {outcome.status}.",
+            )
+
+        if outcome.evidence_bundle is not None:
+            return (
+                False,
+                f"{case_id} unexpectedly produced analytical evidence.",
+            )
+
+        if not outcome.clarification_question:
+            return (
+                False,
+                f"{case_id} did not return a clarification question.",
+            )
+
+        return True, "PASS: missing required entity safely clarified"
     expected_pairs = {
         "P01": ("DIABETES", 976),
         "P02": ("DIABETES", 976),
@@ -361,6 +382,52 @@ def main() -> None:
                 evidence_domain="PLACES_IHME",
                 explanation=(
                     "Validated cross-source asthma trend request."
+                ),
+            ),
+        ),
+        (
+            "P07",
+            "Cross-source trend missing county",
+            SemanticAnalysisRequest(
+                question=ResearchQuestion(
+                    raw_text=(
+                        "Compare CDC PLACES diabetes prevalence "
+                        "with IHME type 2 diabetes burden "
+                        "from 2018 to 2019."
+                    )
+                ),
+                intent=AnalysisIntent.TREND_COMPARISON,
+                confidence=1.0,
+                county_name=None,
+                cause_name="type 2 diabetes",
+                start_year=2018,
+                end_year=2019,
+                evidence_domain="PLACES_IHME",
+                explanation=(
+                    "Cross-source trend request missing county."
+                ),
+            ),
+        ),
+        (
+            "P08",
+            "Cross-source trend missing cause",
+            SemanticAnalysisRequest(
+                question=ResearchQuestion(
+                    raw_text=(
+                        "Compare CDC PLACES prevalence with IHME "
+                        "burden in Milwaukee County, Wisconsin "
+                        "from 2018 to 2019."
+                    )
+                ),
+                intent=AnalysisIntent.TREND_COMPARISON,
+                confidence=1.0,
+                county_name="Milwaukee County, Wisconsin",
+                cause_name=None,
+                start_year=2018,
+                end_year=2019,
+                evidence_domain="PLACES_IHME",
+                explanation=(
+                    "Cross-source trend request missing disease or cause."
                 ),
             ),
         ),
