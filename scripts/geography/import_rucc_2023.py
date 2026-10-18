@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import sys
 import duckdb
 import pandas as pd
 
@@ -262,5 +263,23 @@ def import_rucc(
     )
 
 
+def main() -> None:
+    if len(sys.argv) not in {1, 3}:
+        print(
+            "Usage:\n"
+            "python scripts\\geography\\import_rucc_2023.py "
+            "[\"database.duckdb\" \"rucc-2023.csv\"]"
+        )
+        raise SystemExit(1)
+
+    if len(sys.argv) == 3:
+        import_rucc(
+            Path(sys.argv[1]),
+            Path(sys.argv[2]),
+        )
+    else:
+        import_rucc()
+
+
 if __name__ == "__main__":
-    import_rucc()
+    main()

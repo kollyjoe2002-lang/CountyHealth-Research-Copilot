@@ -13,11 +13,21 @@ from scripts.places.load_metadata import (
 )
 
 
-def write_metadata(db_path: Path) -> None:
+def write_metadata(
+    db_path: Path,
+    dictionary_path: Path = DEFAULT_DICTIONARY,
+) -> None:
     db_path = db_path.resolve()
+    dictionary_path = dictionary_path.resolve()
+
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    dictionary = load_dictionary(DEFAULT_DICTIONARY)
+    if not dictionary_path.exists():
+        raise FileNotFoundError(
+            f"PLACES dictionary not found: {dictionary_path}"
+        )
+
+    dictionary = load_dictionary(dictionary_path)
 
     measures = build_measure_catalog(dictionary)
     versions = build_measure_versions(dictionary)
@@ -150,15 +160,24 @@ def write_metadata(db_path: Path) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in {2, 3}:
         print(
             "Usage:\n"
             "python scripts\\places\\write_metadata.py "
-            "\"path-to-test-duckdb\""
+            "\"database.duckdb\" "
+            "[\"places-data-dictionary.csv\"]"
         )
         raise SystemExit(1)
 
-    write_metadata(Path(sys.argv[1]))
+    db_path = Path(sys.argv[1])
+
+    if len(sys.argv) == 3:
+        write_metadata(
+            db_path,
+            Path(sys.argv[2]),
+        )
+    else:
+        write_metadata(db_path)
 
 
 if __name__ == "__main__":
