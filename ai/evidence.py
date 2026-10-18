@@ -1366,6 +1366,13 @@ def _interpret_places_ihme_disparity(
         )
     )
 
+    cause_name = str(
+        bundle.context.get(
+            "cause_name",
+            "the selected cause",
+        )
+    )
+
     positive = context.loc[
         context["signed_yll_gap"] > 0
     ]
@@ -1380,9 +1387,9 @@ def _interpret_places_ihme_disparity(
 
     findings = [
         (
-            f"{len(context):,} counties had matched CDC PLACES "
-            "prevalence context and IHME demographic disparity "
-            "estimates."
+            f"{len(context):,} U.S. counties had matched CDC PLACES "
+            f"prevalence context and IHME {cause_name} demographic "
+            "disparity estimates."
         ),
         (
             "Across the matched counties, the median CDC PLACES "
