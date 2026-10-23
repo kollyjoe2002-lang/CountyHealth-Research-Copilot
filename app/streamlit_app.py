@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 st.set_page_config(
-    page_title="CountyHealth Research Copilot",
+    page_title="EpiCounty",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -19,16 +19,18 @@ st.set_page_config(
 
 
 def main() -> None:
-    st.title("🏥 CountyHealth Research Copilot")
+    st.title("EpiCounty")
 
     st.markdown(
         """
-        Welcome to the **CountyHealth Research Copilot**.
+        **EpiCounty** is a county-level public health research platform for
+        exploring disease burden, prevalence, demographic disparities,
+        rural-urban differences, and validated cross-source patterns across
+        the United States.
 
-        This research application allows investigators to explore
-        county-level obesity prevalence and high-BMI-attributable
-        disease burden across the United States using validated
-        IHME county estimates (2000–2019).
+        The platform integrates **IHME county disease-burden estimates**,
+        **CDC PLACES prevalence estimates**, and **USDA Rural-Urban Continuum
+        Codes (RUCC)** within a validated analytical workflow.
         """
     )
 
@@ -38,21 +40,65 @@ def main() -> None:
 
     with c1:
         st.metric(
-            label="Current Counties",
-            value="3,124",
+            label="IHME Coverage",
+            value="2000-2019",
         )
 
     with c2:
         st.metric(
-            label="Years",
-            value="20",
+            label="CDC PLACES",
+            value="Through 2023",
         )
 
     with c3:
         st.metric(
-            label="Causes",
-            value="30",
+            label="Rurality",
+            value="RUCC 2023",
         )
+
+    st.divider()
+
+    st.subheader("Research Capabilities")
+
+    left, right = st.columns(2)
+
+    with left:
+        st.markdown(
+            """
+            **County and disease analysis**
+            - County health profiles
+            - Disease-burden trends
+            - County rankings
+            - Race, ethnicity, sex, and age disparities
+
+            **CDC PLACES**
+            - County prevalence snapshots
+            - Prevalence trends
+            - County rankings
+            """
+        )
+
+    with right:
+        st.markdown(
+            """
+            **Rural Health**
+            - Metropolitan vs nonmetropolitan comparisons
+            - RUCC rurality analysis
+            - Adjacent vs non-adjacent rural comparisons
+
+            **PLACES + IHME**
+            - Validated county trend comparisons
+            - Rurality comparisons
+            - Demographic disparity context
+            """
+        )
+
+    st.info(
+        "Use the AI Research Assistant to ask supported natural-language "
+        "research questions. EpiCounty keeps CDC PLACES prevalence and IHME "
+        "disease-burden measures distinct and does not treat descriptive "
+        "cross-source associations as causal."
+    )
 
     st.divider()
 
@@ -63,20 +109,16 @@ def main() -> None:
         - **County Profile**
         - **Trend Finder**
         - **Disparity Finder**
-        - **Research Report**
+        - **Research Report / AI Research Assistant**
+        - **Beta Health**
         """
-    )
-
-    st.info(
-        "Select a page from the left navigation once additional pages are added."
     )
 
     st.divider()
 
     st.caption(
-        "Version 1.0 • Built with DuckDB, Streamlit and IHME county-level data."
+        "EpiCounty V1.2 ? DuckDB ? Streamlit ? IHME ? CDC PLACES ? USDA RUCC"
     )
-
 
 if __name__ == "__main__":
     main()

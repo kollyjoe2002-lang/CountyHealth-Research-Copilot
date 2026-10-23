@@ -1070,11 +1070,13 @@ if is_internal_test_session():
     )
 
 st.caption(
-    "Ask a supported county-level public health question. "
-    "The system builds a transparent analytical plan, executes "
-    "validated analytics, generates a deterministic research report, "
-    "and may provide an AI interpretation that must pass multiple "
-    "evidence-grounding checks before display."
+    "Ask a supported county-level public health question using "
+    "IHME disease-burden data, CDC PLACES prevalence estimates, "
+    "USDA rural-urban classifications, or validated cross-source "
+    "PLACES-IHME analyses. The system builds a transparent analytical "
+    "plan, executes validated analytics, generates a deterministic "
+    "research report, and may provide an AI interpretation that must "
+    "pass multiple evidence-grounding checks before display."
 )
 
 st.info(
@@ -1082,6 +1084,47 @@ st.info(
     "factual foundation. AI-generated interpretation is displayed "
     "only after passing structural grounding, deterministic semantic "
     "validation, and model-based entailment checks."
+)
+
+st.markdown("## Research capabilities")
+
+capability_col_1, capability_col_2 = st.columns(2)
+
+with capability_col_1:
+    st.markdown(
+        """
+**IHME disease burden**
+- County disease profiles
+- Disease-burden trends
+- County rankings
+- Race, ethnicity, sex, and age disparities
+
+**CDC PLACES**
+- County prevalence snapshots
+- County prevalence trends
+- County rankings
+"""
+    )
+
+with capability_col_2:
+    st.markdown(
+        """
+**Rural Health**
+- Metropolitan vs nonmetropolitan comparisons
+- RUCC rurality comparisons
+- Adjacent vs non-adjacent rural counties
+
+**PLACES + IHME**
+- Validated county trend comparisons
+- Rurality comparisons
+- Demographic disparity context
+"""
+    )
+
+st.caption(
+    "PLACES prevalence and IHME disease-burden measures remain "
+    "distinct evidence systems. Cross-source analyses do not combine "
+    "them into a single measure and do not imply causation."
 )
 
 st.markdown("## Ask a research question")
@@ -1099,6 +1142,10 @@ example_questions = [
     (
         "Compare diabetes burden among Black and "
         "White adults in 2019."
+    ),
+    (
+        "Compare diabetes prevalence and type 2 diabetes burden "
+        "between metropolitan and rural counties."
     ),
 ]
 
@@ -1205,9 +1252,11 @@ if message:
         )
 
         st.caption(
-            "EpiCounty currently supports county profiles, "
-            "single-county trends, county rankings, and "
-            "demographic disparity comparisons."
+            "EpiCounty currently supports IHME county profiles, "
+            "disease-burden trends, county rankings, demographic "
+            "disparities, CDC PLACES prevalence analyses, rurality "
+            "comparisons, and selected validated PLACES-IHME "
+            "cross-source analyses."
         )
 
     else:
@@ -1291,15 +1340,26 @@ with st.expander(
 
 ### Current supported question types
 
-- County profiles
+- IHME county disease profiles
 - Single-county disease-burden trends
 - National county rankings
 - Race, ethnicity, sex, or age-group disparity comparisons
+- CDC PLACES county prevalence snapshots, trends, and rankings
+- Metropolitan and nonmetropolitan rural-health comparisons
+- RUCC-based rurality comparisons
+- Selected validated PLACES-IHME county trends
+- Selected validated PLACES-IHME rurality comparisons
+- Selected validated PLACES-IHME demographic disparity analyses
 
-### Important limitation
+### Important limitations
 
-The current system is deterministic. It does not yet support unrestricted
-conversation, causal inference, statistical significance testing, or every
-possible phrasing of a research question.
+CDC PLACES prevalence estimates and IHME disease-burden estimates are
+distinct measures and are not combined into a composite outcome.
+
+Cross-source analyses are descriptive and do not establish causation.
+
+The system does not yet support unrestricted conversation, causal inference,
+statistical significance testing, or every possible phrasing of a research
+question.
 """
     )
