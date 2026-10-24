@@ -2,7 +2,7 @@
 
 Version changes describe the inventory, not the data. Legacy executable means
 an existing code path, not that this checkout has freshly passed warehouse gates.
-Runtime consumers remain unchanged during Phase 2.
+Runtime consumers remain unchanged through Phase 3.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
-REGISTRY_VERSION = "1.3.0-phase2.1"
+REGISTRY_VERSION = "1.3.0-phase3.1"
 
 
 class Source(str, Enum):
@@ -40,6 +40,7 @@ class Surface(str, Enum):
 class GeographyMode(str, Enum):
     COUNTY = "single_county"
     COUNTY_RANKING = "eligible_county_ranking"
+    COUNTY_UNIVERSE = "eligible_county_analytical_universe"
     COUNTY_CONTEXT = "county_fips_alignment"
     METRO = "rucc_metro_nonmetro"
     RUCC_CODE = "rucc_codes_1_to_9"
@@ -71,6 +72,14 @@ APPROVED_PLACES_IHME_PAIRS: Mapping[str, frozenset[int]] = MappingProxyType({
     "DIABETES": frozenset({976}),
     "STROKE": frozenset({494}),
     "CASTHMA": frozenset({515}),
+})
+
+
+# Existing direct data-API code envelopes, NOT observed catalog availability.
+# PLACES semantic policy is narrower (2018 onward) and remains unchanged.
+MEASUREMENT_YEAR_BOUNDS: Mapping[Source, tuple[int, int]] = MappingProxyType({
+    Source.IHME: (2000, 2019),
+    Source.PLACES: (2017, 2023),
 })
 
 
@@ -275,16 +284,20 @@ for _suffix, _dimensions in (
             ),
         ))
 
-for _key, _dims in (
-    ("sex_age", ("Sex", "Age group")),
-    ("sex_rurality", ("Sex", "rurality")),
-    ("age_rurality", ("Age group", "rurality")),
+# Rurality groups use the existing precise three-group RUCC adjacency mode.
+# A demographic county universe is not itself a ranking operation.
+for _key, _dims, _sources, _geography in (
+    ("sex_age", ("Sex", "Age group"), _I, (GeographyMode.COUNTY_UNIVERSE,)),
+    ("sex_rurality", ("Sex", "rurality"), (Source.IHME, Source.RUCC),
+     (GeographyMode.RUCC_ADJACENCY,)),
+    ("age_rurality", ("Age group", "rurality"), (Source.IHME, Source.RUCC),
+     (GeographyMode.RUCC_ADJACENCY,)),
 ):
     _ENTRIES.append(Capability(
         key=_key, operation=_key, state=CapabilityState.PLANNED,
-        validation=ValidationStatus.PENDING, functions=(), sources=_I,
+        validation=ValidationStatus.PENDING, functions=(), sources=_sources,
         surfaces=(), comparison_dimensions=_dims,
-        geography_modes=_R, restrictions=("Disabled; requires later validated analytics",),
+        geography_modes=_geography, restrictions=("Disabled; requires later validated analytics",),
         validators=("check_capability_registry",),
     ))
 

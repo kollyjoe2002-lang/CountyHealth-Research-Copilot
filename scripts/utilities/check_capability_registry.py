@@ -15,8 +15,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from ai.capabilities import (
     APPROVED_PLACES_IHME_PAIRS, ASSISTANT_FUNCTIONS, CAPABILITIES,
     CATALOG_FUNCTIONS, DIMENSION_RULES, EXECUTOR_TRANSFORMS, RESOLUTION_OPERATIONS,
-    REGISTRY_VERSION, SOURCE_RESTRICTIONS,
-    CapabilityState, Source, Surface, ValidationStatus, executable_capabilities,
+    REGISTRY_VERSION, SOURCE_RESTRICTIONS, MEASUREMENT_YEAR_BOUNDS,
+    CapabilityState, GeographyMode, Source, Surface, ValidationStatus, executable_capabilities,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -80,6 +80,42 @@ class CapabilityRegistryChecks(unittest.TestCase):
             self.assertEqual(cap.functions, ())
             self.assertEqual(cap.surfaces, ())
             self.assertIs(cap.validation, ValidationStatus.PENDING)
+
+    def test_source_year_envelopes_match_legacy_code_bounds(self):
+        self.assertEqual(dict(MEASUREMENT_YEAR_BOUNDS), {
+            Source.IHME: (2000, 2019), Source.PLACES: (2017, 2023),
+        })
+        self.assertEqual(MEASUREMENT_YEAR_BOUNDS[Source.IHME], (
+            literal_assignment("ai/validation.py", "SUPPORTED_FIRST_YEAR"),
+            literal_assignment("ai/validation.py", "SUPPORTED_LAST_YEAR"),
+        ))
+        # Direct PLACES ranking's bounds intentionally differ from semantic policy.
+        tree = ast.parse((ROOT / "app/data_access.py").read_text())
+        function = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                        and n.name == "get_places_county_measure_ranking")
+        comparisons = [n for n in ast.walk(function) if isinstance(n, ast.Compare)
+                       and isinstance(n.left, ast.Name) and n.left.id == "year_value"]
+        bounds = tuple(ast.literal_eval(n.comparators[0]) for n in comparisons
+                       if isinstance(n.comparators[0], ast.Constant))
+        self.assertEqual(bounds, MEASUREMENT_YEAR_BOUNDS[Source.PLACES])
+        with self.assertRaises(TypeError):
+            MEASUREMENT_YEAR_BOUNDS[Source.IHME] = (2000, 2035)
+
+    def test_planned_source_and_geography_dependencies(self):
+        cases = (
+            ("sex_age", (Source.IHME,), (GeographyMode.COUNTY_UNIVERSE,)),
+            ("sex_rurality", (Source.IHME, Source.RUCC), (GeographyMode.RUCC_ADJACENCY,)),
+            ("age_rurality", (Source.IHME, Source.RUCC), (GeographyMode.RUCC_ADJACENCY,)),
+        )
+        for key, sources, geography in cases:
+            with self.subTest(key=key):
+                cap = CAPABILITIES[key]
+                self.assertEqual(cap.sources, sources)
+                self.assertEqual(cap.geography_modes, geography)
+                self.assertNotIn(GeographyMode.COUNTY_RANKING, cap.geography_modes)
+                self.assertFalse(cap.executable)
+                self.assertFalse(cap.functions)
+                self.assertFalse(cap.surfaces)
 
     def test_unsupported_cannot_be_executable(self):
         expected = {"forecast", "causal_inference", "hypothesis_testing",
@@ -151,7 +187,7 @@ class CapabilityRegistryChecks(unittest.TestCase):
                 self.assertIsInstance(getattr(cap, name), tuple)
 
     def test_passive_import_has_no_runtime_dependencies(self):
-        for path in ("ai/capabilities.py", "ai/evidence_semantics.py"):
+        for path in ("ai/capabilities.py", "ai/evidence_semantics.py", "ai/query_models.py"):
             tree = ast.parse((ROOT / path).read_text())
             imports = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
             imports |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
