@@ -121,6 +121,8 @@ def run_research_assistant(
     semantic_parser: OpenAISemanticParser | None = None,
     telemetry_context: TelemetryContext | None = None,
     fixture_context=None,
+    capability_catalog=None,
+    conversation_mode: bool = False,
 ) -> ResearchAssistantOutcome:
     """
     Run the complete validated EpiCounty research-assistant
@@ -148,6 +150,13 @@ def run_research_assistant(
     def finalize(
         outcome: ResearchAssistantOutcome,
     ) -> ResearchAssistantOutcome:
+        if outcome.status not in {"answer", "capability_summary"}:
+            from ai.capability_conversation import fallback
+            outcome.failure_reason = (outcome.failure_reason or outcome.policy_result.failure_reason
+                                      or (outcome.resolved_plan.resolved_context.get("failure_reason") if outcome.resolved_plan else None))
+            outcome.conversation_response = fallback(outcome, capability_catalog)
+            outcome.failure_reason = outcome.conversation_response.reason
+
         latency_ms = (
             perf_counter() - started_at
         ) * 1000.0
@@ -167,6 +176,15 @@ def run_research_assistant(
             "The research question cannot be empty."
         )
 
+    from ai.capability_conversation import summary_topic, capability_summary
+    topic = summary_topic(cleaned)
+    if topic:
+        from ai.models import SemanticAnalysisRequest, AnalysisIntent, RequestPolicyResult
+        request = SemanticAnalysisRequest(ResearchQuestion(cleaned), AnalysisIntent.UNKNOWN, 1.0)
+        return finalize(ResearchAssistantOutcome("capability_summary", request,
+            RequestPolicyResult(request, RequestPolicyDecision.CLARIFY, "Deterministic capability description; no analytics"),
+            conversation_response=capability_summary(topic, capability_catalog)))
+
     try:
         active_semantic_parser = (
             semantic_parser
@@ -183,6 +201,19 @@ def run_research_assistant(
         policy_result = apply_request_policy(
             semantic_request
         )
+        if conversation_mode and policy_result.decision is not RequestPolicyDecision.REJECT:
+            from ai.conversation_state import conversation_preflight
+            preflight = conversation_preflight(semantic_request)
+            clarification_text = (semantic_request.clarification_question or "").casefold()
+            slot_clarification = preflight and (
+                (preflight.failure_reason.value == "SOURCE_REQUIRED" and any(w in clarification_text for w in ("source", "places", "ihme"))) or
+                (preflight.failure_reason.value == "YEAR_REQUIRED" and "year" in clarification_text))
+            if semantic_request.needs_clarification and not slot_clarification:
+                from ai.models import RequestPolicyResult
+                policy_result = RequestPolicyResult(semantic_request, RequestPolicyDecision.CLARIFY,
+                    "Follow-up clarification is required", clarification_question=semantic_request.clarification_question)
+            else:
+                policy_result = preflight or policy_result
 
         if (
             policy_result.decision
@@ -314,6 +345,16 @@ def run_research_assistant(
         raise
 
     except Exception as exc:
+        if conversation_mode:
+            from ai.models import SemanticAnalysisRequest, AnalysisIntent, RequestPolicyResult
+            from ai.conversation_contracts import FailureReason
+            request = locals().get("semantic_request") or SemanticAnalysisRequest(
+                ResearchQuestion(cleaned), AnalysisIntent.UNKNOWN, 0.0)
+            return finalize(ResearchAssistantOutcome("infrastructure_error", request,
+                RequestPolicyResult(request, RequestPolicyDecision.CLARIFY,
+                    "A required service could not complete the request",
+                    failure_reason=FailureReason.INFRASTRUCTURE_UNAVAILABLE),
+                failure_reason=FailureReason.INFRASTRUCTURE_UNAVAILABLE))
         raise ResearchAssistantError(
             "The research assistant could not produce "
             f"a validated orchestration result: {exc}"

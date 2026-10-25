@@ -5,6 +5,8 @@ selected by parser JSON, environment variables, or public capability metadata.
 """
 from __future__ import annotations
 
+from ai.conversation_contracts import FailureReason
+
 from dataclasses import asdict, dataclass, is_dataclass, replace
 from enum import Enum
 import hashlib
@@ -77,6 +79,7 @@ class MultidimensionalResolution:
     decision: SemanticCapabilityDecision
     receipt: AvailabilityReceipt | None = None
     unresolved: tuple[str, ...] = ()
+    failure_reason: FailureReason | None = None
 
 
 def validate_fixture_availability(query: ResolvedQuery, context: FixtureIntegrationContext) -> tuple[ResolvedQuery, AvailabilityReceipt]:

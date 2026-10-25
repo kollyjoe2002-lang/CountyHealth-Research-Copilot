@@ -6,6 +6,8 @@ from typing import Any
 
 import pandas as pd
 
+from ai.conversation_contracts import FailureReason
+
 from ai.models import (
     AnalysisIntent,
     AnalysisPlan,
@@ -22,6 +24,27 @@ from app.data_access import (
 
 class ResolutionError(ValueError):
     """Raised when an analytical entity cannot be resolved safely."""
+
+    def __init__(self, message, *, reason=None):
+        super().__init__(message)
+        from ai.conversation_contracts import FailureReason as R
+        text = message.casefold()
+        if reason is None:
+            if 'lookup' in text and ('no records' in text or 'missing required' in text):
+                reason = R.INFRASTRUCTURE_UNAVAILABLE
+            elif 'county' in text and ('ambiguous' in text or 'specify the state' in text):
+                reason = R.AMBIGUOUS_COUNTY
+            elif ('cause' in text or 'concept' in text) and 'ambiguous' in text:
+                reason = R.AMBIGUOUS_HEALTH_CONCEPT
+            elif 'matched to a validated' in text or 'to a cdc places measure' in text:
+                reason = R.HEALTH_CONCEPT_UNAVAILABLE
+            elif 'approved' in text and ('pair' in text or 'concept' in text):
+                reason = R.HEALTH_CONCEPT_UNAVAILABLE
+            elif 'group' in text or 'demographic' in text:
+                reason = R.AMBIGUOUS_DEMOGRAPHIC_VALUE
+            else:
+                reason = R.INTENT_AMBIGUOUS
+        self.reason = reason
 
 
 def _normalize_text(value: str) -> str:
@@ -1874,6 +1897,7 @@ def resolve_plan(
                 ] = analysis_year
 
     except ResolutionError as exc:
+        plan.resolved_context["failure_reason"] = exc.reason
         plan.unresolved_items.append(
             str(exc)
         )
@@ -1967,12 +1991,12 @@ def resolve_multidimensional_request(request, normalized, *, fixture_context=Non
             raise ResolutionError(assessed.explanation)
     except (ResolutionError, ValueError) as exc:
         return MultidimensionalResolution(None, draft, decision("clarification_required", "catalog_unresolved"),
-                                         unresolved=(str(exc),))
+                                         unresolved=(str(exc),), failure_reason=getattr(exc, "reason", None))
     try:
         query, receipt = validate_fixture_availability(query, fixture_context)
     except DuplicateAnalyticalKeyError as exc:
         return MultidimensionalResolution(None, draft, decision("clarification_required", "catalog_ambiguous"),
-                                         unresolved=(str(exc),))
+                                         unresolved=(str(exc),), failure_reason=FailureReason.AMBIGUOUS_DEMOGRAPHIC_VALUE)
     except LookupError as exc:
         return MultidimensionalResolution(query, query_preview(query), decision("data_unavailable", str(exc), query))
     return MultidimensionalResolution(query, query_preview(query), decision("activation_pending", "fixture_only_records_present", query), receipt)

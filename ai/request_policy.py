@@ -14,6 +14,7 @@ from ai.models import (
     SemanticAnalysisRequest,
 )
 from ai.capabilities import CAPABILITIES, CapabilityState
+from ai.conversation_contracts import FailureReason as R
 
 from ai.validation import (
     SUPPORTED_FIRST_YEAR,
@@ -114,11 +115,13 @@ def _supported_year_bounds(
 def _reject(
     request: SemanticAnalysisRequest,
     reason: str,
+    code: R | None = None,
 ) -> RequestPolicyResult:
     return RequestPolicyResult(
         request=request,
         decision=RequestPolicyDecision.REJECT,
         reason=reason,
+        failure_reason=code,
     )
 
 
@@ -175,15 +178,17 @@ def apply_request_policy(
 
     # New population constraints must never fall through into weaker legacy plans.
     raw = request.question.raw_text
+    if re.search(r"\b(forecast|predict|causal|causality)\b|\beffect of\b", raw, re.I):
+        return _reject(request, "Forecasts and causal inference are not supported", R.OPERATION_UNSUPPORTED)
     if (re.search(SEX_WORDS, raw, re.I) and re.search(AGE_PATTERN, raw, re.I) and re.search(RURAL_WORDS, raw, re.I)):
-        return _reject(request, "Sex × age × rurality is not validated")
+        return _reject(request, "Sex × age × rurality is not validated", R.DEMOGRAPHIC_COMBINATION_UNSUPPORTED)
     if re.search(RACE_WORDS, raw, re.I) and (re.search(SEX_WORDS, raw, re.I) or re.search(AGE_PATTERN, raw, re.I) or re.search(RURAL_WORDS, raw, re.I)):
-        return _reject(request, "Race intersections are not validated")
+        return _reject(request, "Race intersections are not validated", R.DEMOGRAPHIC_COMBINATION_UNSUPPORTED)
     if request.evidence_domain == "PLACES" and (
         request.demographic_dimension or request.demographic_groups or
         re.search(SEX_WORDS + "|" + RACE_WORDS + "|" + AGE_PATTERN, request.question.raw_text, re.I)
     ):
-        return _reject(request, "PLACES demographic prevalence is not supported")
+        return _reject(request, "PLACES demographic prevalence is not supported", R.DEMOGRAPHIC_COMBINATION_UNSUPPORTED)
     if request.multidimensional is not None or compound_population_requested(request.question.raw_text):
         if request.multidimensional is not None and (request.demographic_dimension or request.demographic_groups):
             return _clarify(request, "Legacy and multidimensional population fields must not compete", "Clarify the independent population fields")
@@ -321,6 +326,7 @@ def apply_request_policy(
                f"{supported_first_year}-"
                f"{supported_last_year}."
             ),
+            R.YEAR_UNAVAILABLE,
         )
 
     assumptions: list[str] = []

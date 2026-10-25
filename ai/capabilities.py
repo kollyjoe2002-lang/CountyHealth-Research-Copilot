@@ -11,7 +11,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
-REGISTRY_VERSION = "1.3.0-phase5.1"
+REGISTRY_VERSION = "1.3.0-phase6.0"
 
 
 class Source(str, Enum):

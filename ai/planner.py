@@ -70,7 +70,7 @@ def build_analysis_plan(
         from ai.multidimensional_integration import plan_function
         context = {"multidimensional": True, "resolved_query": resolution.query,
                    "interpreted_query": resolution.preview, "capability_decision": resolution.decision,
-                   "availability_receipt": resolution.receipt}
+                   "availability_receipt": resolution.receipt, "failure_reason": resolution.failure_reason}
         steps = []
         if resolution.query is not None and resolution.receipt is not None:
             operation, function = plan_function(resolution.query)

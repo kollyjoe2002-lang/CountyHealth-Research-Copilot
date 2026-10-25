@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from ai.conversation_contracts import ConversationResponse, FailureReason
+
 from ai.multidimensional_request import (
     MultidimensionalRequest, NormalizedMultidimensional, SemanticCapabilityDecision,
 )
@@ -114,6 +116,7 @@ class RequestPolicyResult:
     )
 
     normalized_multidimensional: NormalizedMultidimensional | None = None
+    failure_reason: FailureReason | None = None
 
 
 @dataclass
@@ -303,6 +306,8 @@ class ResearchAssistantOutcome:
 
     ai_error: str | None = None
     capability_decision: SemanticCapabilityDecision | None = None
+    failure_reason: FailureReason | None = None
+    conversation_response: ConversationResponse | None = None
 
 class TelemetryOutcome(str, Enum):
     """
@@ -315,6 +320,8 @@ class TelemetryOutcome(str, Enum):
     ERROR = "error"
     PLANNED = "planned"
     UNAVAILABLE = "unavailable"
+    INFRASTRUCTURE_ERROR = "infrastructure_error"
+    CAPABILITY_SUMMARY = "capability_summary"
 
 
 @dataclass(frozen=True)
