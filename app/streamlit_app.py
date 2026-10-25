@@ -94,11 +94,13 @@ def main() -> None:
         )
 
     st.info(
-        "Use the AI Research Assistant to ask supported natural-language "
+        "Use the AI Research Assistant to ask research questions, answer clarifications, or explore capabilities. Ask supported natural-language "
         "research questions. EpiCounty keeps CDC PLACES prevalence and IHME "
         "disease-burden measures distinct and does not treat descriptive "
         "cross-source associations as causal."
     )
+
+    st.caption('Sex × age, sex × rurality and age × rurality are planned, not activated. Condition and year availability require catalog checks; RUCC 2023 is a fixed geographic lens.')
 
     st.divider()
 

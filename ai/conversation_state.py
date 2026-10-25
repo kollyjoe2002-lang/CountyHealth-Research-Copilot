@@ -192,6 +192,14 @@ class TurnParser:
         return merged
 
 
+def state_is_stale(state, catalog, *, now=None):
+    """Shared invalidation rule for core turns and presentation-only reruns."""
+    clock = time() if now is None else now
+    return bool(state and (state.registry_version != REGISTRY_VERSION or
+        state.catalog_fingerprint != catalog.fingerprint or state.turns >= MAX_TURNS or
+        not 0 <= clock - state.created_at <= MAX_AGE_SECONDS))
+
+
 def run_research_turn(text, *, state=None, semantic_parser=None, capability_catalog=None, now=None, **pipeline_options):
     """Conversation control only. All analytical work uses run_research_assistant.
 
@@ -204,8 +212,7 @@ def run_research_turn(text, *, state=None, semantic_parser=None, capability_cata
     clock = time() if now is None else now
     if not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT:
         return ResearchTurn(None, ConversationResponse('Please provide a research question within the supported length.', R.INTENT_AMBIGUOUS), None)
-    if state and (state.registry_version != REGISTRY_VERSION or state.catalog_fingerprint != catalog.fingerprint
-                  or state.turns >= MAX_TURNS or not 0 <= clock - state.created_at <= MAX_AGE_SECONDS):
+    if state_is_stale(state, catalog, now=clock):
         return ResearchTurn(None, ConversationResponse('The capability/catalog context changed or the bounded session expired. Please restate the full research question so it can be validated again.', R.STATE_INVALIDATED), None)
     # Descriptions do not mutate a pending research intent or require a live API.
     if summary_topic(text):

@@ -17,13 +17,13 @@ def summary_topic(text):
         return 'capabilities'
     if re.fullmatch(r'what (diseases|conditions|health conditions) (do you cover|are available)', t):
         return 'concepts'
-    if re.fullmatch(r'what years (are available|do you support|do you cover)', t):
+    if re.fullmatch(r'what years (are available|do you support|do you cover|do you have)', t):
         return 'years'
     if re.fullmatch(r'can you compare (women and men|men and women|sexes)', t):
         return 'sex'
     if re.fullmatch(r'can you compare (by rurality|rural and metro counties|rural and urban counties)', t):
         return 'rurality'
-    if re.fullmatch(r'do you have breast cancer', t):
+    if re.fullmatch(r'do you have breast cancer(?: data)?', t):
         return 'breast cancer'
     return None
 

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hmac
 import os
@@ -36,10 +36,12 @@ from ai.figures import (
 
 from ai.models import TelemetryContext
 
-from ai.research_assistant import (
-    ResearchAssistantError,
-    run_research_assistant,
-)
+from app.research_conversation import refresh_catalog, submit_research_turn
+from app.research_presentation import (interpreted_preview, provenance, turn_status,
+    report_is_safe, interpretation_is_safe, narrative_is_safe)
+from ai.conversation_state import state_is_stale
+from ai.capability_conversation import capability_summary
+
 
 from ai.feedback_store import (
     append_research_feedback,
@@ -68,7 +70,7 @@ INTERNAL_TEST_QUERY_FLAG = "admin"
 
 st.set_page_config(
     page_title="Research Report",
-    page_icon="ðŸ§ ",
+    page_icon="🔬",
     layout="wide",
 )
 
@@ -83,6 +85,10 @@ def initialize_session_state() -> None:
     """
     defaults = {
         "research_report_question": "",
+        "research_conversation_state": None,
+        "research_latest_turn": None,
+        "research_catalog": None,
+        "research_last_message": "",
         "research_report_outcome": None,
         "research_report_classified": None,
         "research_report_feedback_submitted": False,
@@ -319,188 +325,55 @@ def resolve_beta_traffic_source(
     )
 
 
-def run_research_pipeline(
-    question: str,
-) -> None:
-    """
-    Run the canonical EpiCounty research-assistant orchestrator
-    and adapt its structured outcome to Streamlit session state.
-
-    This function performs no independent classification, planning,
-    entity resolution, analytical execution, or AI interpretation.
-    Those responsibilities belong to run_research_assistant().
-    """
+def run_research_pipeline(question: str) -> None:
+    """Presentation only; every submission uses the canonical bounded turn API."""
     clear_results()
-
+    st.session_state['research_last_message'] = question
     try:
-        traffic_source = resolve_beta_traffic_source(
-            is_internal_test_session()
-        )
-
-        telemetry_context = TelemetryContext(
-            environment="beta",
-            traffic_source=traffic_source,
+        context = TelemetryContext(environment='beta',
+            traffic_source=resolve_beta_traffic_source(is_internal_test_session()),
             beta_cohort=BETA_COHORT,
-            anonymous_session_id=st.session_state[
-                "research_report_anonymous_session_id"
-            ],
-        )
-
-        outcome = run_research_assistant(
-            question,
-            telemetry_context=telemetry_context,
-        )
-
-        st.session_state[
-            "research_report_outcome"
-        ] = outcome
-
-        if outcome.status == "clarify":
-            message = (
-                outcome.clarification_question
-                or outcome.policy_result.reason
-                or (
-                    "The research question requires additional "
-                    "information before it can be executed."
-                )
-            )
-
-            st.session_state[
-                "research_report_message_type"
-            ] = "clarify"
-
-            st.session_state[
-                "research_report_error"
-            ] = message
-
-            st.session_state[
-                "research_report_classified"
-            ] = outcome.classified_question
-
-            st.session_state[
-                "research_report_plan"
-            ] = outcome.resolved_plan
-
+            anonymous_session_id=st.session_state['research_report_anonymous_session_id'])
+        turn = submit_research_turn(question, state=st.session_state['research_conversation_state'],
+            catalog=st.session_state['research_catalog'], telemetry_context=context)
+        st.session_state['research_latest_turn'] = turn
+        st.session_state['research_conversation_state'] = turn.state
+        outcome = turn.outcome
+        st.session_state['research_report_outcome'] = outcome
+        if outcome is None:
             return
-
-        if outcome.status == "reject":
-            message = (
-                outcome.rejection_reason
-                or outcome.policy_result.reason
-                or (
-                    "The requested analytical operation is not "
-                    "supported by the current EpiCounty engine."
-                )
-            )
-
-            st.session_state[
-                "research_report_message_type"
-            ] = "reject"
-
-            st.session_state[
-                "research_report_error"
-            ] = message
-
+        st.session_state['research_report_classified'] = outcome.classified_question
+        st.session_state['research_report_plan'] = outcome.resolved_plan
+        if outcome.status != 'answer' or outcome.evidence_bundle is None:
             return
-
-        evidence = outcome.evidence_bundle
-
-        if evidence is None:
-            raise ResearchAssistantError(
-                "The research assistant completed without producing "
-                "a validated evidence bundle."
-            )
-
-        report = write_research_report(
-            evidence
-        )
-
-        st.session_state[
-            "research_report_classified"
-        ] = outcome.classified_question
-
-        st.session_state[
-            "research_report_plan"
-        ] = outcome.resolved_plan
-
-        st.session_state[
-            "research_report_evidence"
-        ] = evidence
-
-        st.session_state[
-            "research_report_report"
-        ] = report
-
-        st.session_state[
-            "research_report_interpretation_input"
-        ] = outcome.interpretation_input
-
-        st.session_state[
-            "research_report_interpretation"
-        ] = outcome.interpretation_result
-
-        st.session_state[
-            "research_report_ai_error"
-        ] = outcome.ai_error
-
-    except Exception as exc:
-        st.session_state[
-            "research_report_message_type"
-        ] = "error"
-
-        st.session_state[
-            "research_report_error"
-        ] = (
-            "The research report interface encountered an "
-            f"unexpected error: {exc}"
-        )
+        st.session_state['research_report_evidence'] = outcome.evidence_bundle
+        report = write_research_report(outcome.evidence_bundle)
+        if not report_is_safe(report):
+            st.session_state['research_report_ai_error'] = 'Narrative/export presentation is withheld pending source provenance or validated interpretation. Deterministic evidence remains available.'
+            return
+        st.session_state['research_report_report'] = report
+        st.session_state['research_report_interpretation_input'] = outcome.interpretation_input
+        st.session_state['research_report_interpretation'] = outcome.interpretation_result if interpretation_is_safe(outcome.interpretation_result) else None
+        st.session_state['research_report_ai_error'] = outcome.ai_error or (None if interpretation_is_safe(outcome.interpretation_result) else 'A validated narrative with verified source semantics is not available.')
+    except Exception:
+        # No raw resolver/API/database internals in normal conversation.
+        st.session_state['research_latest_turn'] = None
+        st.session_state['research_report_error'] = ('A required service could not complete this turn. '
+            'This infrastructure problem does not establish absence of scientific data.')
 
 
 def display_plan() -> None:
-    plan = st.session_state.get(
-        "research_report_plan"
-    )
-
-    if plan is None:
+    outcome = st.session_state.get('research_report_outcome')
+    if outcome is None:
         return
-
-    st.markdown("### Analysis plan")
-
-    st.write(
-        f"**Detected intent:** "
-        f"`{plan.intent.value}`"
-    )
-
-    if plan.assumptions:
-        st.markdown("**Resolved assumptions**")
-
-        for assumption in plan.assumptions:
-            st.write(f"- {assumption}")
-
-    plan_rows = []
-
-    for step in plan.steps:
-        plan_rows.append(
-            {
-                "Step": step.step_number,
-                "Operation": step.operation,
-                "Function": step.function_name,
-                "Parameters": str(
-                    step.parameters
-                ),
-                "Purpose": step.purpose,
-            }
-        )
-
-    plan_dataframe = pd.DataFrame(
-        plan_rows
-    )
-
-    st.dataframe(
-        plan_dataframe,
-        width="stretch",
-        hide_index=True,
-    )
+    rows = interpreted_preview(outcome)
+    if rows:
+        st.markdown('### Interpreted query')
+        st.dataframe(pd.DataFrame([{'Field': row.field, 'Interpretation': row.interpretation,
+            'Status': row.status} for row in rows]), hide_index=True, width='stretch')
+        st.caption('Requested or normalized intent is labelled separately from catalog-resolved values. Planned capabilities remain non-executable.')
+    with st.expander('Query provenance and identifiers'):
+        st.json(provenance(outcome))
 
 
 def display_evidence() -> None:
@@ -518,7 +391,7 @@ def display_evidence() -> None:
         start=1,
     ):
         with st.expander(
-            f"Evidence {index}: {item.title}",
+            f"Evidence {index}: {item.title if narrative_is_safe(item.title) else 'Canonical evidence table'}",
             expanded=(
                 index == 1
             ),
@@ -541,7 +414,7 @@ def display_evidence() -> None:
                     "No parameters."
                 )
 
-            if item.interpretation_note:
+            if item.interpretation_note and narrative_is_safe(item.interpretation_note):
                 st.write(
                     f"**Purpose:** "
                     f"{item.interpretation_note}"
@@ -721,9 +594,10 @@ def display_ai_interpretation() -> None:
                 ]
 
                 for claim in matching_claims:
-                    st.write(
-                        claim.text
-                    )
+                    if narrative_is_safe(claim.text):
+                        st.write(claim.text)
+                    else:
+                        st.caption("Legacy attribution/unit wording withheld pending provenance.")
 
     if interpretation.interpretation:
         st.markdown(
@@ -756,9 +630,10 @@ def display_ai_interpretation() -> None:
                         ]
 
                         for claim in matching_claims:
-                            st.write(
-                                claim.text
-                            )
+                            if narrative_is_safe(claim.text):
+                                st.write(claim.text)
+                            else:
+                                st.caption("Legacy attribution/unit wording withheld pending provenance.")
 
     if interpretation.follow_up_questions:
         st.markdown(
@@ -1058,308 +933,81 @@ def display_research_feedback_form() -> None:
 initialize_session_state()
 render_internal_test_controls()
 
-st.title(
-    "AI Research Assistant"
-)
-
+st.title('AI Research Assistant')
+st.caption('Ask a research question, answer a clarification, or explore EpiCounty capabilities. Only the current exchange is retained for display; research intent is bounded by the core session rules.')
 if is_internal_test_session():
-    st.warning(
-        "INTERNAL TEST MODE — requests from this browser session "
-        "are excluded from external-beta telemetry, and researcher "
-        "feedback collection is disabled."
-    )
+    st.warning('INTERNAL TEST MODE — excluded from external-beta telemetry; researcher feedback is disabled.')
 
-st.caption(
-    "Ask a supported county-level public health question using "
-    "IHME disease-burden data, CDC PLACES prevalence estimates, "
-    "USDA rural-urban classifications, or validated cross-source "
-    "PLACES-IHME analyses. The system builds a transparent analytical "
-    "plan, executes validated analytics, generates a deterministic "
-    "research report, and may provide an AI interpretation that must "
-    "pass multiple evidence-grounding checks before display."
-)
+catalog, catalog_warning = refresh_catalog(st.session_state['research_catalog'])
+st.session_state['research_catalog'] = catalog
+if catalog_warning:
+    st.caption(catalog_warning)
 
-st.info(
-    "EpiCounty uses validated deterministic analytics as the "
-    "factual foundation. AI-generated interpretation is displayed "
-    "only after passing structural grounding, deterministic semantic "
-    "validation, and model-based entailment checks."
-)
-
-st.markdown("## Research capabilities")
-
-capability_col_1, capability_col_2 = st.columns(2)
-
-with capability_col_1:
-    st.markdown(
-        """
-**IHME disease burden**
-- County disease profiles
-- Disease-burden trends
-- County rankings
-- Race, ethnicity, sex, and age disparities
-
-**CDC PLACES**
-- County prevalence snapshots
-- County prevalence trends
-- County rankings
-"""
-    )
-
-with capability_col_2:
-    st.markdown(
-        """
-**Rural Health**
-- Metropolitan vs nonmetropolitan comparisons
-- RUCC rurality comparisons
-- Adjacent vs non-adjacent rural counties
-
-**PLACES + IHME**
-- Validated county trend comparisons
-- Rurality comparisons
-- Demographic disparity context
-"""
-    )
-
-st.caption(
-    "PLACES prevalence and IHME disease-burden measures remain "
-    "distinct evidence systems. Cross-source analyses do not combine "
-    "them into a single measure and do not imply causation."
-)
-
-st.markdown("## Ask a research question")
-
-example_questions = [
-    "Tell me about Albany County, Wyoming.",
-    (
-        "Show the trend in ischemic heart disease "
-        "in Albany County, Wyoming from 2000 to 2019."
-    ),
-    (
-        "Which counties had the highest diabetes "
-        "YLL rates in 2019?"
-    ),
-    (
-        "Compare diabetes burden among Black and "
-        "White adults in 2019."
-    ),
-    (
-        "Compare diabetes prevalence and type 2 diabetes burden "
-        "between metropolitan and rural counties."
-    ),
-]
-
-selected_example = st.selectbox(
-    "Example questions",
-    options=[
-        "Write my own question",
-        *example_questions,
-    ],
-)
-
-if (
-    selected_example
-    != "Write my own question"
-):
-    current_question = (
-        selected_example
-    )
-else:
-    current_question = st.session_state.get(
-        "research_report_question",
-        "",
-    )
-
-question = st.text_area(
-    "Research question",
-    value=current_question,
-    height=120,
-    placeholder=(
-        "Example: Tell me about Albany County, Wyoming."
-    ),
-)
-
-st.session_state[
-    "research_report_question"
-] = question
-
-button_col_1, button_col_2 = (
-    st.columns(
-        [
-            3,
-            1,
-        ]
-    )
-)
-
-with button_col_1:
-    generate_clicked = st.button(
-        "Generate validated report",
-        type="primary",
-        width="stretch",
-    )
-
-with button_col_2:
-    clear_clicked = st.button(
-        "Clear",
-        width="stretch",
-    )
-
-if clear_clicked:
+# Reruns use the same invalidation rule as the canonical turn API. Old results
+# are not displayed under an expired or changed capability/catalog context.
+if state_is_stale(st.session_state['research_conversation_state'], catalog):
     clear_results()
+    st.session_state['research_conversation_state'] = None
+    st.session_state['research_latest_turn'] = None
+    st.session_state['research_last_message'] = ''
+    st.info('The research session expired or its capability/catalog context changed. Please restate the complete question.')
 
-    st.session_state[
-        "research_report_question"
-    ] = ""
+with st.expander('Research capability guidance'):
+    st.write(capability_summary('capabilities', catalog).text)
+    st.caption('Try: What health conditions do you cover? What years do you have? Can you compare women and men? Do you have breast cancer data?')
 
+if st.button('Start a new research question'):
+    clear_results()
+    st.session_state['research_conversation_state'] = None
+    st.session_state['research_latest_turn'] = None
+    st.session_state['research_last_message'] = ''
     st.rerun()
 
-if generate_clicked:
-    cleaned_question = (
-        question.strip()
-    )
-
-    if not cleaned_question:
-        st.warning(
-            "Enter a research question before generating a report."
-        )
-    else:
-        with st.spinner(
-            "Running validated analytics, generating the report, "
-            "and checking the AI interpretation..."
-        ):
-            run_research_pipeline(
-                cleaned_question
-            )
-
-message = st.session_state.get(
-    "research_report_error"
-)
-
-message_type = st.session_state.get(
-    "research_report_message_type"
-)
-
+message = st.chat_input('Ask a research question or answer the pending clarification', max_chars=4000)
 if message:
-    if message_type == "clarify":
-        st.info(
-            f"More information is needed: {message}"
-        )
+    with st.spinner('Validating research intent and evidence…'):
+        run_research_pipeline(message)
 
-    elif message_type == "reject":
-        st.warning(
-            message
-        )
+turn = st.session_state['research_latest_turn']
+if st.session_state['research_last_message']:
+    with st.chat_message('user'):
+        st.write(st.session_state['research_last_message'])
+if turn is not None:
+    with st.chat_message('assistant'):
+        status = turn_status(turn)
+        if status == 'Validated answer' and not interpretation_is_safe(turn.outcome.interpretation_result):
+            status = 'Deterministic evidence; narrative provenance pending'
+        if status == 'Infrastructure error':
+            st.error(status)
+        elif status in {'Unsupported analysis', 'Data or year unavailable', 'Planned — not activated'}:
+            st.warning(status)
+        elif status == 'Validated answer':
+            st.success(status)
+        else:
+            st.info(status)
+        if turn.response:
+            st.write(turn.response.text)
+        elif turn.outcome and interpretation_is_safe(turn.outcome.interpretation_result):
+            st.write(turn.outcome.interpretation_result.direct_answer.text)
+        elif turn.outcome and turn.outcome.evidence_bundle:
+            st.write('Deterministic evidence is available below. A validated narrative interpretation is not available.')
+    display_plan()
+if st.session_state['research_report_error']:
+    st.error(st.session_state['research_report_error'])
 
-        st.caption(
-            "EpiCounty currently supports IHME county profiles, "
-            "disease-burden trends, county rankings, demographic "
-            "disparities, CDC PLACES prevalence analyses, rurality "
-            "comparisons, and selected validated PLACES-IHME "
-            "cross-source analyses."
-        )
+if st.session_state['research_report_ai_error'] and st.session_state['research_report_report'] is None:
+    st.warning(st.session_state['research_report_ai_error'])
+    display_evidence()
 
-    else:
-        st.error(
-            message
-        )
-
-        st.info(
-            "The research assistant encountered a technical "
-            "problem while processing this request. "
-            "Please try again."
-        )
-
-report = st.session_state.get(
-    "research_report_report"
-)
-
-if report is not None:
+if st.session_state['research_report_report'] is not None:
     display_report()
-
-    st.markdown("---")
-
     display_ai_interpretation()
-
-    st.markdown("---")
-
     display_research_figure()
-
-    st.markdown("---")
-
-    inspection_tab, evidence_tab, raw_tab = (
-        st.tabs(
-            [
-                "Analysis plan",
-                "Evidence",
-                "Markdown preview",
-            ]
-        )
-    )
-
-    with inspection_tab:
-        display_plan()
-
-    with evidence_tab:
+    with st.expander('Analytical evidence and provenance'):
         display_evidence()
-
-    with raw_tab:
-        st.code(
-            report_to_markdown(
-                report
-            ),
-            language="markdown",
-        )
-
-    st.markdown("---")
-
     display_downloads()
-
-    st.markdown("---")
-
     display_research_feedback_form()
 
-# ============================================================================
-# METHODS NOTE
-# ============================================================================
-
-with st.expander(
-    "How this research assistant works"
-):
-    st.markdown(
-        """
-### Processing pipeline
-
-1. **Question classifier** identifies the supported analytical intent.
-2. **Analysis planner** selects approved analytics operations.
-3. **Entity resolver** resolves county names, causes, years, and groups.
-4. **Executor** calls only approved data-access functions.
-5. **Evidence interpreter** converts returned tables into findings.
-6. **Report writer** creates a structured research report.
-7. **Exporter** produces Markdown and DOCX files.
-
-### Current supported question types
-
-- IHME county disease profiles
-- Single-county disease-burden trends
-- National county rankings
-- Race, ethnicity, sex, or age-group disparity comparisons
-- CDC PLACES county prevalence snapshots, trends, and rankings
-- Metropolitan and nonmetropolitan rural-health comparisons
-- RUCC-based rurality comparisons
-- Selected validated PLACES-IHME county trends
-- Selected validated PLACES-IHME rurality comparisons
-- Selected validated PLACES-IHME demographic disparity analyses
-
-### Important limitations
-
-CDC PLACES prevalence estimates and IHME disease-burden estimates are
-distinct measures and are not combined into a composite outcome.
-
-Cross-source analyses are descriptive and do not establish causation.
-
-The system does not yet support unrestricted conversation, causal inference,
-statistical significance testing, or every possible phrasing of a research
-question.
-"""
-    )
+with st.expander('How this research assistant works'):
+    st.write('Semantic parser → typed request → capability decision → canonical resolver → availability validation → analysis plan → allowlisted executor → deterministic analytics → evidence → grounded interpretation → entailment validation.')
+    st.caption('Sex × age, sex × rurality and age × rurality remain PLANNED pending real warehouse activation. Suggestions require your choice and full revalidation. IHME attribution and unit scale remain provenance-pending. RUCC 2023 is a fixed geographic lens.')
