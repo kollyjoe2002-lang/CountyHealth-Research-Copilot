@@ -214,25 +214,41 @@ def load_capability_catalog():
     exception must not be replaced with an empty checked source catalog.
     """
     from app.data_access import DB_FILE
-    from ai.capabilities import MULTIDIMENSIONAL_RELATIONS
+    return load_capability_catalog_path(DB_FILE)
+
+
+def load_capability_catalog_path(database_path):
+    """Explicit read-only path used only by trusted callers, never parser input."""
     import duckdb
-    import hashlib
-    import json
-    if not DB_FILE.is_file():
+    from pathlib import Path
+    database_path=Path(database_path)
+    if not database_path.is_file():
         raise FileNotFoundError('Canonical analytical warehouse is unavailable')
-    connection = duckdb.connect(str(DB_FILE), read_only=True)
+    connection = duckdb.connect(str(database_path), read_only=True, config={"enable_external_access": "false"})
     try:
         connection.execute('BEGIN TRANSACTION')
-        catalogs = {}
-        for key in ('causes', 'sex', 'age', 'race_ethnicity', 'counties', 'rucc'):
-            relation = MULTIDIMENSIONAL_RELATIONS[key]
-            columns = ', '.join(relation.column(c) for c in relation.columns)
-            catalogs[key] = connection.execute(f'SELECT DISTINCT {columns} FROM {relation.qualified_name} ORDER BY ALL').fetchall()
-        catalogs['places'] = connection.execute('SELECT measure_id, canonical_name FROM places.measures ORDER BY measure_id').fetchall()
-        catalogs['ihme_years'] = connection.execute('SELECT DISTINCT year FROM ihme.burden WHERE measure_id=4 AND metric_id=3 AND year IS NOT NULL ORDER BY year').fetchall()
-        catalogs['places_years'] = connection.execute('SELECT DISTINCT measurement_year FROM places.estimates WHERE measurement_year IS NOT NULL ORDER BY measurement_year').fetchall()
+        return read_capability_catalog(connection)
     finally:
         connection.close()
+
+
+def read_capability_catalog(connection):
+    """Exact shared catalog projection for UI refresh and explicit-path audits.
+
+    Caller owns the read-only connection/snapshot; this function never opens a
+    path, downloads data, or changes schema. It does not alter refresh policy.
+    """
+    from ai.capabilities import MULTIDIMENSIONAL_RELATIONS
+    import hashlib
+    import json
+    catalogs = {}
+    for key in ('causes', 'sex', 'age', 'race_ethnicity', 'counties', 'rucc'):
+        relation = MULTIDIMENSIONAL_RELATIONS[key]
+        columns = ', '.join(relation.column(c) for c in relation.columns)
+        catalogs[key] = connection.execute(f'SELECT DISTINCT {columns} FROM {relation.qualified_name} ORDER BY ALL').fetchall()
+    catalogs['places'] = connection.execute('SELECT measure_id, canonical_name FROM places.measures ORDER BY measure_id').fetchall()
+    catalogs['ihme_years'] = connection.execute('SELECT DISTINCT year FROM ihme.burden WHERE measure_id=4 AND metric_id=3 AND year IS NOT NULL ORDER BY year').fetchall()
+    catalogs['places_years'] = connection.execute('SELECT DISTINCT measurement_year FROM places.estimates WHERE measurement_year IS NOT NULL ORDER BY measurement_year').fetchall()
     fingerprint = hashlib.sha256(json.dumps(catalogs, default=str, sort_keys=True).encode()).hexdigest()
     return CapabilityCatalog(tuple(str(row[1]) for row in catalogs['causes']),
         tuple(str(row[1]) for row in catalogs['places']), (Source.IHME.value, Source.PLACES.value),

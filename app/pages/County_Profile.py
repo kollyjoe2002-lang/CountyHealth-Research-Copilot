@@ -35,10 +35,12 @@ st.title("📍 County Profile")
 
 st.write(
     """
-    Explore county-level obesity prevalence and high-BMI-attributable
+    Explore county-level obesity prevalence and IHME
     disease burden for an individual county.
     """
 )
+
+st.caption("IHME YLL attribution, rate unit scale and dataset version remain unknown pending source/import provenance. No risk-specific attribution is asserted.")
 
 st.divider()
 
@@ -194,7 +196,7 @@ else:
 
 st.divider()
 
-st.subheader("Leading High-BMI-Attributable Causes")
+st.subheader("Leading IHME Causes")
 
 st.caption(
     "Top causes ranked by years-of-life-lost rate for the selected "
@@ -327,7 +329,7 @@ st.divider()
 st.subheader("Cause Trend")
 
 st.caption(
-    "Annual high-BMI-attributable years-of-life-lost rate, "
+    "Annual IHME years-of-life-lost rate, "
     "including the 95% uncertainty interval."
 )
 
@@ -552,7 +554,7 @@ st.divider()
 st.subheader("Long-Term Cause Change")
 
 st.caption(
-    "Change in high-BMI-attributable years-of-life-lost rates "
+    "Change in IHME years-of-life-lost rates "
     "between 2000 and 2019."
 )
 

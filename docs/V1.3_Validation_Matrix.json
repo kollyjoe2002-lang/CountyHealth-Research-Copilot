@@ -1,0 +1,821 @@
+{
+  "tested_code_sha256": "b1c8b489583e13bcd4e36294f8cc30362e90d944fb4a7a6125d45755dd172f9e",
+  "classification": "NOT RELEASE READY",
+  "candidate_base": "fea981e6239f3172bd0ecdf51f6a846c1860664d",
+  "credential_available": false,
+  "explicit_warehouse_supplied": false,
+  "activation": {
+    "sex_age": {
+      "status": "BLOCKED",
+      "data_gate_ready": false,
+      "registry_state": "PLANNED"
+    },
+    "sex_rurality": {
+      "status": "BLOCKED",
+      "data_gate_ready": false,
+      "registry_state": "PLANNED"
+    },
+    "age_rurality": {
+      "status": "BLOCKED",
+      "data_gate_ready": false,
+      "registry_state": "PLANNED"
+    }
+  },
+  "gates": [
+    {
+      "gate": "check_activation_contracts",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 10.983827447999829
+    },
+    {
+      "gate": "check_ai_classifier",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.08319296199988457
+    },
+    {
+      "gate": "check_ai_entailment_judge",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_evidence",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_evidence_claims",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_executor",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_exporter",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_figures",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_formatter",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_full_chain_all_intents",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_full_interpretation_chain",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_interpretation_input",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_interpretation_provider",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_interpretation_validator",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_negative_cases",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_openai_interpretation",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_planner",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.07047280500000852
+    },
+    {
+      "gate": "check_ai_report_writer",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_research_assistant",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_resolver",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_ai_semantic_entailment",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_all_causes_relationship",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_bmi_analytics",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_burden_paf_analytics",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_burden_paf_gaps",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_burden_structure",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_capability_registry",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.12696963999997024
+    },
+    {
+      "gate": "check_conversational_core",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 2.466938806000144
+    },
+    {
+      "gate": "check_county_profile",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_county_ranking_access",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_county_resolution",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_current_rankings",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_data_access",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_demographic_group_resolution",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_disparity_finder",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_display_labels",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_evidence_language_guardrails",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_evidence_semantics",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.07567468400020516
+    },
+    {
+      "gate": "check_exporter_figure_fallback",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 1.001695040999948
+    },
+    {
+      "gate": "check_feedback_store",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.5868490259999817
+    },
+    {
+      "gate": "check_feedback_summary",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.7843021120002049
+    },
+    {
+      "gate": "check_file_row_counts",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_geography",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_geography_harmonization",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_geojson_match",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied; county GeoJSON not explicitly supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_metadata",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_multidimensional_analytics",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 7.0753399959999115
+    },
+    {
+      "gate": "check_multidimensional_semantic",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 10.13124582799992
+    },
+    {
+      "gate": "check_paf_structure",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_2020_import",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied; 2020 release archive database not explicitly supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_county_measure_ranking",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_county_measure_trend",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_county_releases",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied; six separate release archive databases not explicitly supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_county_snapshot",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_age_disparity_context",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_age_disparity_ranking",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_coexistence",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_concept_compatibility",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_county_context",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_county_trend_context",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_cross_source_regression_matrix",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_demographic_disparity_ranking",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_demographic_disparity_trend_context",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_deterministic_suite",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_disparity_semantic",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_disparity_trend_wrappers",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_model_diagnostics",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_positive_deviance",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_race_disparity_context",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_race_disparity_ranking",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_rurality_comparison",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_rurality_semantic",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_semantic",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_sex_disparity_context",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_ihme_sex_disparity_ranking",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_import_log",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_integrated",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_metadata",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_rucc_adjacent_comparison",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_rucc_comparison",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_rural_metro_comparison",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_places_schema",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.13789980999990803
+    },
+    {
+      "gate": "check_places_semantic",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_query_contracts",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.10241375300029176
+    },
+    {
+      "gate": "check_ranking_geography",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_rankings",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_release_contracts",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 5.987986828999965
+    },
+    {
+      "gate": "check_report_provenance",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.8818670529999508
+    },
+    {
+      "gate": "check_request_policy",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.07793833499999892
+    },
+    {
+      "gate": "check_research_experience",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 10.68899734200022
+    },
+    {
+      "gate": "check_research_report_beta_provenance",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.020912649999900168
+    },
+    {
+      "gate": "check_research_telemetry",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_rucc_2023",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_semantic_full_chain",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_semantic_parser",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_semantic_stress_matrix",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_telemetry_provenance",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.5416110129999652
+    },
+    {
+      "gate": "check_telemetry_scope_filter",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.7850531879998925
+    },
+    {
+      "gate": "check_telemetry_store",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_telemetry_summary",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.5985371870001472
+    },
+    {
+      "gate": "check_v1_2_lay_language",
+      "status": "PASS",
+      "reason": "Fresh executable suite passed",
+      "release_required": true,
+      "exit_code": 0,
+      "seconds": 0.10697335699978794
+    },
+    {
+      "gate": "check_v1_3_live_semantics",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_v1_acceptance_suite",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_v1_export_figure_integration",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_v1_question_matrix",
+      "status": "BLOCKED",
+      "reason": "explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_v1_streamlit_integration",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "check_v1_ui_error_states",
+      "status": "BLOCKED",
+      "reason": "live API credentials unavailable; explicit actual development warehouse not supplied",
+      "release_required": true,
+      "invocation": "fresh prerequisite evaluation; analytical body not run"
+    },
+    {
+      "gate": "real_data_multidimensional_activation",
+      "status": "BLOCKED",
+      "reason": "Explicit warehouse, reviewed coverage acceptance and sampled real-data checks required; no fixture substitution",
+      "release_required": false
+    },
+    {
+      "gate": "real_data_performance",
+      "status": "BLOCKED",
+      "reason": "No valid real-data operation/catalog timing available; fixture timings are not substituted",
+      "release_required": true
+    },
+    {
+      "gate": "compileall",
+      "status": "PASS",
+      "reason": "Fresh local check",
+      "release_required": true
+    },
+    {
+      "gate": "git_diff_check",
+      "status": "PASS",
+      "reason": "Fresh local check",
+      "release_required": true
+    }
+  ]
+}

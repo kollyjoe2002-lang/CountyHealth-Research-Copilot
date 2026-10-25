@@ -33,7 +33,7 @@ class FixtureIntegrationContext:
             or not path.is_file() or not path.is_relative_to(Path(tempfile.gettempdir()).resolve())
             or path == DB_FILE.resolve() or path.stat().st_size > 16 * 1024 * 1024):
             raise ValueError("An explicit small temporary synthetic fixture is required; public activation is disabled")
-        connection = duckdb.connect(str(path), read_only=True)
+        connection = duckdb.connect(str(path), read_only=True, config={"enable_external_access": "false"})
         try:
             marker = connection.execute("SELECT marker FROM analytics.multidimensional_fixture_marker").fetchall()
             if marker != [("synthetic_structural_fixture_only",)]:
@@ -88,7 +88,7 @@ def validate_fixture_availability(query: ResolvedQuery, context: FixtureIntegrat
         raise ValueError("Explicit typed fixture context required")
     path = context.validate()
     from app.multidimensional import _definitions, _county_scope
-    connection = duckdb.connect(str(path), read_only=True)
+    connection = duckdb.connect(str(path), read_only=True, config={"enable_external_access": "false"})
     try:
         connection.execute("BEGIN TRANSACTION")
         definitions = _definitions(connection, query)

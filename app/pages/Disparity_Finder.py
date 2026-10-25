@@ -54,10 +54,11 @@ st.set_page_config(
 )
 
 st.title("Disparity Finder")
+st.caption("IHME attribution, rate unit scale and dataset version remain unknown pending source/import provenance.")
 
 st.caption(
     "Compare county-level demographic differences in "
-    "high-BMI-attributable years-of-life-lost rates."
+    "IHME years-of-life-lost rates."
 )
 
 
@@ -416,7 +417,7 @@ try:
 except Exception as exc:
     st.error(
         "The application could not load disparity-filter options "
-        f"from the warehouse.\n\n{exc}"
+        "from a required service. This infrastructure error does not establish scientific data absence."
     )
     st.stop()
 
@@ -505,7 +506,7 @@ with st.sidebar:
     except Exception as exc:
         st.error(
             "The demographic groups could not be loaded.\n\n"
-            f"{exc}"
+            "Internal service details are withheld; scientific availability is not established by this error."
         )
         st.stop()
 
@@ -615,7 +616,7 @@ try:
 except Exception as exc:
     st.error(
         "The county disparity query failed.\n\n"
-        f"{exc}"
+        "Internal service details are withheld; scientific availability is not established by this error."
     )
     st.stop()
 
@@ -675,7 +676,7 @@ definition_col_1, definition_col_2 = st.columns(
 with definition_col_1:
     st.markdown(
         f"""
-**Outcome:** High-BMI-attributable YLL rate  
+**Outcome:** IHME YLL rate
 **Cause:** {selected_cause_name}  
 **Year:** {selected_year}  
 **Dimension:** {dimension}  
@@ -1426,7 +1427,7 @@ try:
 except Exception as exc:
     st.error(
         "The county trend query failed.\n\n"
-        f"{exc}"
+        "Internal service details are withheld; scientific availability is not established by this error."
     )
     trend = pd.DataFrame()
 

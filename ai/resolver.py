@@ -1947,7 +1947,7 @@ def resolve_multidimensional_request(request, normalized, *, fixture_context=Non
     if not isinstance(fixture_context, FixtureIntegrationContext):
         raise ValueError("Explicit typed fixture context required before catalog access")
     path = fixture_context.validate()
-    connection = duckdb.connect(str(path), read_only=True)
+    connection = duckdb.connect(str(path), read_only=True, config={"enable_external_access": "false"})
     try:
         # Existing canonical catalogs, no model-supplied IDs and no global DB override.
         cause_relation = MULTIDIMENSIONAL_RELATIONS["causes"]

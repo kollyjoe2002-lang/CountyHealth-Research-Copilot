@@ -39,6 +39,7 @@ def run_query(
         connection = duckdb.connect(
             database=str(DB_FILE),
             read_only=True,
+            config={"enable_external_access": "false"},
         )
 
         if parameters is None:
@@ -406,7 +407,8 @@ def get_disparity_causes() -> pd.DataFrame:
     """
     Return all causes available for disparity analysis.
 
-    The burden table contains high-BMI-attributable YLL rates.
+    The burden table supplies YLL rate records; risk attribution and unit scale
+    remain unknown until dataset/import provenance verifies them.
     """
     sql = """
         SELECT DISTINCT

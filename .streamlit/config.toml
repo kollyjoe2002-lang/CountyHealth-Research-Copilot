@@ -1,0 +1,3 @@
+# Suppress public tracebacks/host paths; server diagnostics remain server-side.
+[client]
+showErrorDetails = "none"

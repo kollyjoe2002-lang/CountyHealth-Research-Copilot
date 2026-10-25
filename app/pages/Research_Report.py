@@ -354,7 +354,7 @@ def run_research_pipeline(question: str) -> None:
         st.session_state['research_report_report'] = report
         st.session_state['research_report_interpretation_input'] = outcome.interpretation_input
         st.session_state['research_report_interpretation'] = outcome.interpretation_result if interpretation_is_safe(outcome.interpretation_result) else None
-        st.session_state['research_report_ai_error'] = outcome.ai_error or (None if interpretation_is_safe(outcome.interpretation_result) else 'A validated narrative with verified source semantics is not available.')
+        st.session_state['research_report_ai_error'] = None if interpretation_is_safe(outcome.interpretation_result) else 'A validated narrative with verified source semantics is not available. Required interpretation services may be unavailable.'
     except Exception:
         # No raw resolver/API/database internals in normal conversation.
         st.session_state['research_latest_turn'] = None
@@ -366,6 +366,7 @@ def display_plan() -> None:
     outcome = st.session_state.get('research_report_outcome')
     if outcome is None:
         return
+    st.caption('Current researcher request (intent, not a result): ' + outcome.semantic_request.question.raw_text[:280])
     rows = interpreted_preview(outcome)
     if rows:
         st.markdown('### Interpreted query')
@@ -553,7 +554,7 @@ def display_ai_interpretation() -> None:
                 "Technical details"
             ):
                 st.write(
-                    ai_error
+                    "Interpretation validation or a required service did not complete. Raw service/database details are withheld."
                 )
         else:
             st.info(
@@ -684,7 +685,7 @@ def display_downloads() -> None:
             report
         )
     except Exception as exc:
-        markdown_error = str(exc)
+        markdown_error = "The export service did not complete; internal details are withheld."
 
     try:
         docx_bytes = export_docx_bytes(
@@ -693,10 +694,10 @@ def display_downloads() -> None:
             evidence_row_limit=20,
         )
     except ReportExportError as exc:
-        docx_error = str(exc)
+        docx_error = "The export service did not complete; internal details are withheld."
     except Exception as exc:
         docx_error = (
-            f"Unexpected DOCX export failure: {exc}"
+            "The DOCX export service did not complete; internal details are withheld."
         )
 
     markdown_filename = (
@@ -792,7 +793,7 @@ def display_research_figure() -> None:
 
     except FigureGenerationError as exc:
         st.info(
-            f"A research figure could not be generated: {exc}"
+            "A research figure could not be generated; internal service details are withheld."
         )
 
 
@@ -913,7 +914,7 @@ def display_research_feedback_form() -> None:
         except Exception as exc:
             st.error(
                 "Feedback could not be saved. "
-                f"Please try again. Technical detail: {exc}"
+                "Please try again when the feedback service is available."
             )
 
         else:

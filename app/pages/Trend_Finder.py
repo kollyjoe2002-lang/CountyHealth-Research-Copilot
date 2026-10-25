@@ -31,10 +31,12 @@ st.title("📈 Trend Finder")
 
 st.write(
     """
-    Compare high-BMI-attributable years-of-life-lost trends across
+    Compare IHME years-of-life-lost trends across
     multiple United States counties from 2000 through 2019.
     """
 )
+
+st.caption("IHME YLL attribution, rate unit scale and dataset version remain unknown pending source/import provenance. No risk-specific attribution is asserted.")
 
 st.divider()
 
@@ -203,7 +205,7 @@ st.divider()
 st.subheader("County Trend Comparison")
 
 st.caption(
-    "Annual high-BMI-attributable years-of-life-lost rate."
+    "Annual IHME years-of-life-lost rate."
 )
 
 base = alt.Chart(

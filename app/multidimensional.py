@@ -394,7 +394,7 @@ def get_stratum_values(query: ResolvedQuery, *, database_path: Path) -> StratumV
     path = Path(database_path)
     if not path.is_file():
         raise FileNotFoundError(f"Explicit analytical database does not exist: {path}")
-    connection = duckdb.connect(str(path), read_only=True)
+    connection = duckdb.connect(str(path), read_only=True, config={"enable_external_access": "false"})
     try:
         connection.execute("BEGIN TRANSACTION")
         counties = _counties(connection, query)
