@@ -2,7 +2,7 @@
 
 Version changes describe the inventory, not the data. Legacy executable means
 an existing code path, not that this checkout has freshly passed warehouse gates.
-Runtime consumers remain unchanged through Phase 3.
+Legacy runtime consumers remain unchanged through Phase 4.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
-REGISTRY_VERSION = "1.3.0-phase3.1"
+REGISTRY_VERSION = "1.3.0-phase4.1"
 
 
 class Source(str, Enum):
@@ -297,8 +297,8 @@ for _key, _dims, _sources, _geography in (
         key=_key, operation=_key, state=CapabilityState.PLANNED,
         validation=ValidationStatus.PENDING, functions=(), sources=_sources,
         surfaces=(), comparison_dimensions=_dims,
-        geography_modes=_geography, restrictions=("Disabled; requires later validated analytics",),
-        validators=("check_capability_registry",),
+        geography_modes=_geography, restrictions=("Disabled; requires real warehouse validation before activation",),
+        validators=("check_capability_registry", "check_query_contracts", "check_multidimensional_analytics"),
     ))
 
 for _key in ("forecast", "causal_inference", "hypothesis_testing",
@@ -340,3 +340,40 @@ EXECUTOR_TRANSFORMS = (
                       "_filter_analysis_year_dataframe"),
 )
 RESOLUTION_OPERATIONS = ("resolve_cause", "resolve_county", "resolve_counties", "resolve_groups")
+
+
+@dataclass(frozen=True)
+class SqlRelation:
+    """Owned identifiers for the isolated multidimensional reader only."""
+    schema: str
+    table: str
+    columns: tuple[str, ...]
+
+    @property
+    def qualified_name(self) -> str:
+        return f'"{self.schema}"."{self.table}"'
+
+    def column(self, name: str, alias: str = "") -> str:
+        if name not in self.columns or alias not in {"", "b", "g", "r"}:
+            raise ValueError("SQL identifier is not owned by the multidimensional registry")
+        return (f"{alias}." if alias else "") + f'"{name}"'
+
+
+MULTIDIMENSIONAL_RELATIONS: Mapping[str, SqlRelation] = MappingProxyType({
+    "burden": SqlRelation("ihme", "burden", (
+        "fips", "cause_id", "year", "measure_id", "metric_id", "sex_id",
+        "age_group_id", "race_id", "val", "lower", "upper", "source_status",
+    )),
+    "counties": SqlRelation("analytics", "vw_current_county_lookup", (
+        "fips", "location_name", "state_fips",
+    )),
+    "sex": SqlRelation("analytics", "dim_sex", ("sex_id", "sex_name")),
+    "age": SqlRelation("analytics", "dim_age_group", ("age_group_id", "age_name")),
+    "race_ethnicity": SqlRelation("analytics", "dim_race", ("race_id", "race_name")),
+    "rucc": SqlRelation("geography", "rucc_2023", ("fips", "rucc_code", "source_year")),
+})
+# Optional normalized source metadata, NOT inferred from a missing/null estimate.
+# The current raw warehouse schema has no source_status column. An adapter that
+# supplies it must preserve verified source declarations, with these exact tokens.
+MULTIDIMENSIONAL_SOURCE_STATUSES = frozenset({"observed", "unavailable", "suppressed"})
+MULTIDIMENSIONAL_YLL_FILTER = (("measure_id", 4), ("metric_id", 3))

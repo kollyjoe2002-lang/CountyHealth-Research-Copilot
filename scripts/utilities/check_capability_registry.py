@@ -16,6 +16,7 @@ from ai.capabilities import (
     APPROVED_PLACES_IHME_PAIRS, ASSISTANT_FUNCTIONS, CAPABILITIES,
     CATALOG_FUNCTIONS, DIMENSION_RULES, EXECUTOR_TRANSFORMS, RESOLUTION_OPERATIONS,
     REGISTRY_VERSION, SOURCE_RESTRICTIONS, MEASUREMENT_YEAR_BOUNDS,
+    MULTIDIMENSIONAL_RELATIONS, MULTIDIMENSIONAL_SOURCE_STATUSES, MULTIDIMENSIONAL_YLL_FILTER,
     CapabilityState, GeographyMode, Source, Surface, ValidationStatus, executable_capabilities,
 )
 
@@ -80,6 +81,29 @@ class CapabilityRegistryChecks(unittest.TestCase):
             self.assertEqual(cap.functions, ())
             self.assertEqual(cap.surfaces, ())
             self.assertIs(cap.validation, ValidationStatus.PENDING)
+
+    def test_multidimensional_sql_identifiers_are_owned_immutable_and_passive(self):
+        self.assertEqual(set(MULTIDIMENSIONAL_RELATIONS),
+                         {"burden", "counties", "sex", "age", "race_ethnicity", "rucc"})
+        self.assertEqual(MULTIDIMENSIONAL_YLL_FILTER, (("measure_id", 4), ("metric_id", 3)))
+        self.assertEqual(MULTIDIMENSIONAL_SOURCE_STATUSES,
+                         {"observed", "unavailable", "suppressed"})
+        for relation in MULTIDIMENSIONAL_RELATIONS.values():
+            self.assertIsInstance(relation.columns, tuple)
+            self.assertEqual(len(set(relation.columns)), len(relation.columns))
+            for name in (relation.schema, relation.table, *relation.columns):
+                self.assertTrue(name.replace('_', '').isalnum())
+            with self.assertRaises(ValueError):
+                relation.column("user_supplied_column")
+            with self.assertRaises(FrozenInstanceError):
+                relation.table = "other"
+        with self.assertRaises(TypeError):
+            MULTIDIMENSIONAL_RELATIONS["burden"] = MULTIDIMENSIONAL_RELATIONS["rucc"]
+        # Metadata must never add new functions to an assistant execution surface.
+        for key in ("sex_age", "sex_rurality", "age_rurality"):
+            self.assertFalse(CAPABILITIES[key].executable)
+            self.assertEqual(CAPABILITIES[key].functions, ())
+            self.assertEqual(CAPABILITIES[key].surfaces, ())
 
     def test_source_year_envelopes_match_legacy_code_bounds(self):
         self.assertEqual(dict(MEASUREMENT_YEAR_BOUNDS), {
