@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
+
+from ai.multidimensional_request import (
+    MultidimensionalPolicyError, compound_population_requested, normalize_multidimensional, SEX_WORDS, RACE_WORDS, AGE_PATTERN, RURAL_WORDS,
+)
 
 from ai.models import (
     AnalysisIntent,
@@ -8,6 +13,8 @@ from ai.models import (
     RequestPolicyResult,
     SemanticAnalysisRequest,
 )
+from ai.capabilities import CAPABILITIES, CapabilityState
+
 from ai.validation import (
     SUPPORTED_FIRST_YEAR,
     SUPPORTED_LAST_YEAR,
@@ -165,6 +172,39 @@ def apply_request_policy(
     This policy determines what EpiCounty is allowed to do with that
     interpretation.
     """
+
+    # New population constraints must never fall through into weaker legacy plans.
+    raw = request.question.raw_text
+    if (re.search(SEX_WORDS, raw, re.I) and re.search(AGE_PATTERN, raw, re.I) and re.search(RURAL_WORDS, raw, re.I)):
+        return _reject(request, "Sex × age × rurality is not validated")
+    if re.search(RACE_WORDS, raw, re.I) and (re.search(SEX_WORDS, raw, re.I) or re.search(AGE_PATTERN, raw, re.I) or re.search(RURAL_WORDS, raw, re.I)):
+        return _reject(request, "Race intersections are not validated")
+    if request.evidence_domain == "PLACES" and (
+        request.demographic_dimension or request.demographic_groups or
+        re.search(SEX_WORDS + "|" + RACE_WORDS + "|" + AGE_PATTERN, request.question.raw_text, re.I)
+    ):
+        return _reject(request, "PLACES demographic prevalence is not supported")
+    if request.multidimensional is not None or compound_population_requested(request.question.raw_text):
+        if request.multidimensional is not None and (request.demographic_dimension or request.demographic_groups):
+            return _clarify(request, "Legacy and multidimensional population fields must not compete", "Clarify the independent population fields")
+        if request.intent is AnalysisIntent.UNKNOWN:
+            if request.needs_clarification:
+                return _clarify(request, "Semantic intent is unresolved", request.clarification_question or "Clarify the analytical operation")
+            return _reject(request, "Unsupported semantic intent")
+        try:
+            normalized = normalize_multidimensional(request)
+        except (MultidimensionalPolicyError, ValueError) as exc:
+            if getattr(exc, "clarify", False):
+                return _clarify(request, str(exc), request.clarification_question or str(exc))
+            return _reject(request, str(exc))
+        capability = CAPABILITIES[normalized.capability_key]
+        if capability.state is not CapabilityState.PLANNED:
+            return _reject(request, "New integration requires the explicit planned-capability activation workflow")
+        if request.needs_clarification:
+            return _clarify(request, "Semantic clarification remains unresolved", request.clarification_question or "Clarify the requested population")
+        return RequestPolicyResult(request=request, decision=RequestPolicyDecision.PLANNED,
+            reason="Multidimensional capability is understood but awaits real-data activation",
+            assumptions=list(normalized.assumptions), normalized_multidimensional=normalized)
 
     # ------------------------------------------------------------
     # 1. Reject explicitly unsupported analytical operations.

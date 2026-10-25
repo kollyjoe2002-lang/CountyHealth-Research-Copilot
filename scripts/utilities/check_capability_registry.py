@@ -17,6 +17,7 @@ from ai.capabilities import (
     CATALOG_FUNCTIONS, DIMENSION_RULES, EXECUTOR_TRANSFORMS, RESOLUTION_OPERATIONS,
     REGISTRY_VERSION, SOURCE_RESTRICTIONS, MEASUREMENT_YEAR_BOUNDS,
     MULTIDIMENSIONAL_RELATIONS, MULTIDIMENSIONAL_SOURCE_STATUSES, MULTIDIMENSIONAL_YLL_FILTER,
+    MULTIDIMENSIONAL_POLICY_DEFAULTS,
     CapabilityState, GeographyMode, Source, Surface, ValidationStatus, executable_capabilities,
 )
 
@@ -65,6 +66,22 @@ class CapabilityRegistryChecks(unittest.TestCase):
         self.assertEqual(approved, ASSISTANT_FUNCTIONS)
         self.assertNotIn("get_places_ihme_positive_deviance", listed)
 
+    def test_capability_policy_defaults_and_guarded_allowlist_are_explicit(self):
+        self.assertEqual(dict(MULTIDIMENSIONAL_POLICY_DEFAULTS), {
+            "sex_age": (("race_ethnicity", "Total"),),
+            "sex_rurality": (("race_ethnicity", "Total"), ("age", "20+, age standardized")),
+            "age_rurality": (("race_ethnicity", "Total"), ("sex", "Both sexes")),
+        })
+        with self.assertRaises(TypeError):
+            MULTIDIMENSIONAL_POLICY_DEFAULTS["sex_age"] = ()
+        tree = ast.parse((ROOT / "ai/executor.py").read_text())
+        mapping = next(node.value for node in tree.body if isinstance(node, ast.Assign)
+                       and any(isinstance(target, ast.Name) and target.id == "MULTIDIMENSIONAL_FUNCTIONS"
+                               for target in node.targets))
+        self.assertEqual({ast.literal_eval(key): value.id for key, value in zip(mapping.keys, mapping.values)},
+                         {"compare_strata": "compare_strata", "summarize_by_rurality": "summarize_by_rurality"})
+        self.assertFalse(set(MULTIDIMENSIONAL_POLICY_DEFAULTS) & ASSISTANT_FUNCTIONS)
+
     def test_legacy_executable_is_not_a_fresh_validation_claim(self):
         for cap in executable_capabilities():
             self.assertIs(cap.state, CapabilityState.LEGACY_EXECUTABLE)
@@ -84,7 +101,7 @@ class CapabilityRegistryChecks(unittest.TestCase):
 
     def test_multidimensional_sql_identifiers_are_owned_immutable_and_passive(self):
         self.assertEqual(set(MULTIDIMENSIONAL_RELATIONS),
-                         {"burden", "counties", "sex", "age", "race_ethnicity", "rucc"})
+                         {"burden", "counties", "causes", "sex", "age", "race_ethnicity", "rucc"})
         self.assertEqual(MULTIDIMENSIONAL_YLL_FILTER, (("measure_id", 4), ("metric_id", 3)))
         self.assertEqual(MULTIDIMENSIONAL_SOURCE_STATUSES,
                          {"observed", "unavailable", "suppressed"})
@@ -183,6 +200,8 @@ class CapabilityRegistryChecks(unittest.TestCase):
                 continue
             step = {k.arg: ast.literal_eval(k.value) for k in call.keywords
                     if k.arg in {"operation", "function_name"}}
+            if not step:  # New typed-template positional step is checked by Phase 5 identity validators.
+                continue
             if step["operation"] in RESOLUTION_OPERATIONS:
                 self.assertIn(step["function_name"], CATALOG_FUNCTIONS)
             elif step["function_name"] == "aggregate_long_term_change":

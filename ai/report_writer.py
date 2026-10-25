@@ -11,6 +11,9 @@ from ai.models import (
 def _report_title(
     bundle: EvidenceBundle,
 ) -> str:
+    if bundle.context.get("multidimensional"):
+        return "IHME Multidimensional Research Report (fixture only)"
+
     title_map = {
         AnalysisIntent.COUNTY_PROFILE:
             "County Public Health Profile",
@@ -33,6 +36,12 @@ def _report_title(
 def _methods_text(
     bundle: EvidenceBundle,
 ) -> str:
+    if bundle.context.get("multidimensional"):
+        text = "Read-only deterministic IHME analysis with explicit population filters. Attribution and rate unit scale remain unknown."
+        if bundle.context["interpreted_query"]["query"]["geography"]["classification_year"] is not None:
+            text += " RUCC 2023 is applied as a fixed geographic classification lens."
+        return text
+
     evidence_domain = str(
         bundle.context.get(
             "evidence_domain",
@@ -182,6 +191,10 @@ def _methods_text(
 def _limitations(
     bundle: EvidenceBundle,
 ) -> list[str]:
+    if bundle.context.get("multidimensional"):
+        from ai.multidimensional_evidence import LIMITATIONS
+        return list(LIMITATIONS)
+
     limitations = [
         (
             "The results are descriptive and do not establish "

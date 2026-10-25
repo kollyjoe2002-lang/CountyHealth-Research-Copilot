@@ -145,6 +145,7 @@ def resolve_cause(
     question_text: str,
     *,
     disparity: bool = False,
+    catalog: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """
     Resolve a cause name and ID against the validated lookup.
@@ -155,7 +156,7 @@ def resolve_cause(
     - unknown causes are rejected rather than fuzzily mapped
       to a different validated cause.
     """
-    causes = (
+    causes = catalog if catalog is not None else (
         get_disparity_causes()
         if disparity
         else get_causes()
@@ -575,6 +576,7 @@ def resolve_places_measure(
 
 def resolve_county(
     question_text: str,
+    *, catalog: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """
     Resolve a current county and FIPS code conservatively.
@@ -589,7 +591,7 @@ def resolve_county(
     - unknown or misspelled counties are rejected rather than
       fuzzily mapped to another validated county.
     """
-    counties = get_counties()
+    counties = catalog if catalog is not None else get_counties()
 
     required_columns = {
         "fips",
@@ -1091,6 +1093,12 @@ def resolve_plan(
     interpretation can cite county, cause, year, and demographic
     context explicitly.
     """
+    if classified.extracted_entities.get("multidimensional_request") is not None:
+        if plan.resolved_context.get("resolved_query") is not None and plan.resolved_context.get("availability_receipt") is not None:
+            from ai.multidimensional_integration import validate_plan_identity
+            validate_plan_identity(plan)
+        return plan
+
     question_text = (
         classified.question.raw_text
     )
@@ -1884,3 +1892,87 @@ def resolve_plan(
     )
 
     return plan
+
+def resolve_multidimensional_request(request, normalized, *, fixture_context=None):
+    """Canonical resolution for the new shape, with public activation closed.
+
+    A public planned query can carry a structural preview without fabricated IDs.
+    Exact catalogs/availability/plan execution are exercised only in marked fixtures.
+    """
+    from dataclasses import replace
+    import duckdb
+    from app.multidimensional import DuplicateAnalyticalKeyError
+    from ai.multidimensional_integration import (
+        FixtureIntegrationContext, MultidimensionalResolution, query_preview, wire, validate_fixture_availability,
+    )
+    from ai.multidimensional_request import SemanticCapabilityDecision
+    from ai.capabilities import CAPABILITIES, Source, MULTIDIMENSIONAL_RELATIONS
+    from ai.query_models import (
+        ResolvedQuery, SourceConcept, SourceTime, TimeSpec, TimeAlignment, ReleasePolicy,
+        assess_query_contract, DecisionStatus,
+    )
+    capability = CAPABILITIES[normalized.capability_key]
+    def decision(reason, availability, query=None):
+        return SemanticCapabilityDecision(normalized.capability_key, capability.state.value, reason,
+                                          availability, query, fixture_context is not None)
+    draft = {"normalized": wire(normalized), "cause_name": request.cause_name,
+             "county_name": request.county_name, "public_executable": False,
+             "required_sources": [source.value for source in capability.sources]}
+    if fixture_context is None:
+        return MultidimensionalResolution(None, draft, decision("activation_pending", "not_checked_activation_pending"))
+    if not isinstance(fixture_context, FixtureIntegrationContext):
+        raise ValueError("Explicit typed fixture context required before catalog access")
+    path = fixture_context.validate()
+    connection = duckdb.connect(str(path), read_only=True)
+    try:
+        # Existing canonical catalogs, no model-supplied IDs and no global DB override.
+        cause_relation = MULTIDIMENSIONAL_RELATIONS["causes"]
+        county_relation = MULTIDIMENSIONAL_RELATIONS["counties"]
+        causes = connection.execute(f"SELECT {cause_relation.column('cause_id')}, {cause_relation.column('cause_name')} "
+                                    f"FROM {cause_relation.qualified_name}").fetchdf()
+        counties = connection.execute(f"SELECT {county_relation.column('fips')}, {county_relation.column('location_name')}, "
+                                      f"{county_relation.column('state_fips')} FROM {county_relation.qualified_name}").fetchdf()
+    finally:
+        connection.close()
+    try:
+        cause = resolve_cause(request.cause_name, disparity=True, catalog=causes)
+        raw_cause = resolve_cause(request.question.raw_text, disparity=True, catalog=causes)
+        if raw_cause["cause_id"] != cause["cause_id"]:
+            raise ResolutionError("Parsed concept disagrees with the requested health concept")
+        geography = normalized.geography
+        if request.county_name:
+            county = resolve_county(request.county_name, catalog=counties)
+            if resolve_county(request.question.raw_text, catalog=counties)["fips"] != county["fips"]:
+                raise ResolutionError("Parsed county disagrees with the requested county")
+            geography = replace(geography, county_fips=(str(county["fips"]),))
+        if normalized.state_name:
+            state_candidates = {}
+            for _, row in counties.iterrows():
+                match = re.search(r"\(([^()]+)\)\s*$", str(row["location_name"]))
+                if match:
+                    state_candidates.setdefault(_normalize_text(match[1]), set()).add(str(row["state_fips"]))
+            matches = state_candidates.get(_normalize_text(normalized.state_name), set())
+            if len(matches) != 1:
+                raise ResolutionError("State scope is ambiguous or unavailable in the canonical county catalog")
+            geography = replace(geography, state_fips=tuple(matches))
+        query = ResolvedQuery(capability_key=normalized.capability_key,
+            concepts=(SourceConcept(source=Source.IHME, concept_id=cause["cause_id"], name=cause["cause_name"],
+                                    dataset_version="unknown"),), stratum=normalized.stratum,
+            comparison=normalized.comparison, geography=geography, operation=normalized.operation,
+            time=TimeSpec(sources=(SourceTime(source=Source.IHME, years=normalized.years,
+                           release_policy=ReleasePolicy.SOURCE_OBSERVATION),), alignment=TimeAlignment.SINGLE_SOURCE),
+            assumptions=normalized.assumptions)
+        assessed = assess_query_contract(query)
+        if assessed.status is not DecisionStatus.PLANNED:
+            raise ResolutionError(assessed.explanation)
+    except (ResolutionError, ValueError) as exc:
+        return MultidimensionalResolution(None, draft, decision("clarification_required", "catalog_unresolved"),
+                                         unresolved=(str(exc),))
+    try:
+        query, receipt = validate_fixture_availability(query, fixture_context)
+    except DuplicateAnalyticalKeyError as exc:
+        return MultidimensionalResolution(None, draft, decision("clarification_required", "catalog_ambiguous"),
+                                         unresolved=(str(exc),))
+    except LookupError as exc:
+        return MultidimensionalResolution(query, query_preview(query), decision("data_unavailable", str(exc), query))
+    return MultidimensionalResolution(query, query_preview(query), decision("activation_pending", "fixture_only_records_present", query), receipt)

@@ -1433,6 +1433,10 @@ def interpret_evidence(
     """
     Convert validated analytical evidence into deterministic findings.
     """
+    if bundle.context.get("multidimensional"):
+        from ai.multidimensional_evidence import claims
+        return [claim.text for claim in claims(bundle)]
+
     if bundle.intent == AnalysisIntent.RURALITY_COMPARISON:
         return _interpret_places_ihme_rurality(
             bundle
@@ -1505,6 +1509,10 @@ def build_evidence_claims(
     Semantic claim identifiers are assigned according to the meaning
     of each deterministic finding rather than its list position.
     """
+    if bundle.context.get("multidimensional"):
+        from ai.multidimensional_evidence import claims
+        return claims(bundle)
+
     findings = interpret_evidence(bundle)
 
     context_claims: list[EvidenceClaim] = []

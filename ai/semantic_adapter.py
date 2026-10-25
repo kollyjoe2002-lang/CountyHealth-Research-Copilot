@@ -18,6 +18,9 @@ def semantic_request_to_classified(
 
     entities: dict[str, object] = {}
 
+    if request.multidimensional is not None:
+        entities["multidimensional_request"] = request.multidimensional
+
     years: list[int] = []
 
     if request.year is not None:

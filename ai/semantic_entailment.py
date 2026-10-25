@@ -302,6 +302,13 @@ def _validate_grounded_text(
     *,
     label: str,
 ) -> None:
+    if interpretation_input.context.get("multidimensional"):
+        from ai.multidimensional_evidence import validate_language
+        try:
+            validate_language(text)
+        except ValueError as exc:
+            raise SemanticEntailmentError(str(exc)) from exc
+
     evidence_text = _claim_text(
         interpretation_input,
         supporting_claim_ids,

@@ -2,7 +2,7 @@
 
 Version changes describe the inventory, not the data. Legacy executable means
 an existing code path, not that this checkout has freshly passed warehouse gates.
-Legacy runtime consumers remain unchanged through Phase 4.
+Phase 5 adds guarded fixture integration; planned public activation remains closed.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
 
-REGISTRY_VERSION = "1.3.0-phase4.1"
+REGISTRY_VERSION = "1.3.0-phase5.1"
 
 
 class Source(str, Enum):
@@ -298,7 +298,7 @@ for _key, _dims, _sources, _geography in (
         validation=ValidationStatus.PENDING, functions=(), sources=_sources,
         surfaces=(), comparison_dimensions=_dims,
         geography_modes=_geography, restrictions=("Disabled; requires real warehouse validation before activation",),
-        validators=("check_capability_registry", "check_query_contracts", "check_multidimensional_analytics"),
+        validators=("check_capability_registry", "check_query_contracts", "check_multidimensional_analytics", "check_multidimensional_semantic"),
     ))
 
 for _key in ("forecast", "causal_inference", "hypothesis_testing",
@@ -367,6 +367,7 @@ MULTIDIMENSIONAL_RELATIONS: Mapping[str, SqlRelation] = MappingProxyType({
     "counties": SqlRelation("analytics", "vw_current_county_lookup", (
         "fips", "location_name", "state_fips",
     )),
+    "causes": SqlRelation("analytics", "dim_cause", ("cause_id", "cause_name")),
     "sex": SqlRelation("analytics", "dim_sex", ("sex_id", "sex_name")),
     "age": SqlRelation("analytics", "dim_age_group", ("age_group_id", "age_name")),
     "race_ethnicity": SqlRelation("analytics", "dim_race", ("race_id", "race_name")),
@@ -377,3 +378,12 @@ MULTIDIMENSIONAL_RELATIONS: Mapping[str, SqlRelation] = MappingProxyType({
 # supplies it must preserve verified source declarations, with these exact tokens.
 MULTIDIMENSIONAL_SOURCE_STATUSES = frozenset({"observed", "unavailable", "suppressed"})
 MULTIDIMENSIONAL_YLL_FILTER = (("measure_id", 4), ("metric_id", 3))
+
+
+# Population defaults belong to deterministic capability policy, never parser JSON.
+# These describe the tested intended envelope; they do not activate it.
+MULTIDIMENSIONAL_POLICY_DEFAULTS: Mapping[str, tuple[tuple[str, str], ...]] = MappingProxyType({
+    "sex_age": (("race_ethnicity", "Total"),),
+    "sex_rurality": (("race_ethnicity", "Total"), ("age", "20+, age standardized")),
+    "age_rurality": (("race_ethnicity", "Total"), ("sex", "Both sexes")),
+})

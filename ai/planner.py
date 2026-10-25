@@ -65,6 +65,21 @@ def build_analysis_plan(
     Convert a classified research question into a transparent
     sequence of approved analytical operations.
     """
+    if classified.extracted_entities.get("multidimensional_request") is not None:
+        resolution = classified.extracted_entities["multidimensional_resolution"]
+        from ai.multidimensional_integration import plan_function
+        context = {"multidimensional": True, "resolved_query": resolution.query,
+                   "interpreted_query": resolution.preview, "capability_decision": resolution.decision,
+                   "availability_receipt": resolution.receipt}
+        steps = []
+        if resolution.query is not None and resolution.receipt is not None:
+            operation, function = plan_function(resolution.query)
+            steps = [AnalysisStep(1, operation, function, {"query": resolution.query},
+                                  "Execute the exact resolved multidimensional query under activation guard")]
+        return AnalysisPlan(classified.question, classified.intent, steps,
+                            list(resolution.query.assumptions) if resolution.query else [],
+                            list(resolution.unresolved), context)
+
     intent = classified.intent
     entities = classified.extracted_entities
     evidence_domain = entities.get(

@@ -70,6 +70,13 @@ def interpret_evidence_bundle(
             interpretation_input
         )
 
+        if bundle.context.get("multidimensional"):
+            from ai.multidimensional_evidence import validate_language
+            trusted = set(interpretation_input.limitations + interpretation_input.warnings)
+            for text in result.limitations + result.warnings + result.follow_up_questions:
+                if text not in trusted:
+                    validate_language(text)
+
         validate_interpretation_result(
             interpretation_input,
             result,
@@ -113,6 +120,7 @@ def run_research_assistant(
     judge: OpenAIEntailmentJudge | None = None,
     semantic_parser: OpenAISemanticParser | None = None,
     telemetry_context: TelemetryContext | None = None,
+    fixture_context=None,
 ) -> ResearchAssistantOutcome:
     """
     Run the complete validated EpiCounty research-assistant
@@ -218,6 +226,11 @@ def run_research_assistant(
             classified
         )
 
+        if policy_result.normalized_multidimensional is not None:
+            from ai.resolver import resolve_multidimensional_request
+            classified.extracted_entities["multidimensional_resolution"] = resolve_multidimensional_request(
+                policy_result.request, policy_result.normalized_multidimensional, fixture_context=fixture_context)
+
         plan = build_analysis_plan(
             classified
         )
@@ -233,6 +246,18 @@ def run_research_assistant(
                 for assumption in policy_result.assumptions
                 if assumption not in resolved_plan.assumptions
             )
+
+        if resolved_plan.resolved_context.get("multidimensional"):
+            decision = resolved_plan.resolved_context["capability_decision"]
+            if decision.reason == "clarification_required" or decision.reason == "data_unavailable" or (
+                fixture_context is None or not fixture_context.allow_execution
+            ):
+                status = ("clarify" if decision.reason == "clarification_required" else
+                          "unavailable" if decision.reason == "data_unavailable" else "planned")
+                return finalize(ResearchAssistantOutcome(status=status, semantic_request=semantic_request,
+                    policy_result=policy_result, classified_question=classified, resolved_plan=resolved_plan,
+                    capability_decision=decision,
+                    clarification_question=" ".join(resolved_plan.unresolved_items) or None))
 
         if resolved_plan.unresolved_items:
             return finalize(
@@ -250,9 +275,8 @@ def run_research_assistant(
                 )
             )
 
-        evidence = execute_plan(
-            resolved_plan
-        )
+        evidence = (execute_plan(resolved_plan, fixture_context=fixture_context)
+                    if resolved_plan.resolved_context.get("multidimensional") else execute_plan(resolved_plan))
 
         interpretation_input = None
         interpretation_result = None
@@ -282,6 +306,7 @@ def run_research_assistant(
                 interpretation_input=interpretation_input,
                 interpretation_result=interpretation_result,
                 ai_error=ai_error,
+                capability_decision=resolved_plan.resolved_context.get("capability_decision"),
             )
         )
 
@@ -321,6 +346,9 @@ def answer_research_question(
         semantic_parser=semantic_parser,
         telemetry_context=telemetry_context,
     )
+
+    if outcome.status in {"planned", "unavailable"}:
+        raise ResearchAssistantError("Multidimensional execution is awaiting real-data activation or availability validation")
 
     if outcome.status == "clarify":
         message = (

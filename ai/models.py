@@ -4,6 +4,10 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from ai.multidimensional_request import (
+    MultidimensionalRequest, NormalizedMultidimensional, SemanticCapabilityDecision,
+)
+
 
 class AnalysisIntent(str, Enum):
     COUNTY_PROFILE = "county_profile"
@@ -73,6 +77,7 @@ class SemanticAnalysisRequest:
     clarification_question: str | None = None
 
     explanation: str = ""
+    multidimensional: MultidimensionalRequest | None = None
 
 
 class RequestPolicyDecision(str, Enum):
@@ -83,6 +88,7 @@ class RequestPolicyDecision(str, Enum):
     EXECUTE = "execute"
     CLARIFY = "clarify"
     REJECT = "reject"
+    PLANNED = "planned"
 
 
 @dataclass
@@ -106,6 +112,8 @@ class RequestPolicyResult:
     assumptions: list[str] = field(
         default_factory=list
     )
+
+    normalized_multidimensional: NormalizedMultidimensional | None = None
 
 
 @dataclass
@@ -294,6 +302,7 @@ class ResearchAssistantOutcome:
     rejection_reason: str | None = None
 
     ai_error: str | None = None
+    capability_decision: SemanticCapabilityDecision | None = None
 
 class TelemetryOutcome(str, Enum):
     """
@@ -304,6 +313,8 @@ class TelemetryOutcome(str, Enum):
     CLARIFY = "clarify"
     REJECT = "reject"
     ERROR = "error"
+    PLANNED = "planned"
+    UNAVAILABLE = "unavailable"
 
 
 @dataclass(frozen=True)

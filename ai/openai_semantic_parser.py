@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from ai.multidimensional_request import MULTIDIMENSIONAL_SCHEMA, decode_multidimensional
+
 from ai.models import (
     AnalysisIntent,
     ResearchQuestion,
@@ -138,6 +140,9 @@ class OpenAISemanticParser:
                 "explanation",
             ],
         }
+
+        schema["properties"]["multidimensional"] = MULTIDIMENSIONAL_SCHEMA
+        schema["required"].append("multidimensional")
 
         instructions = """
 You are the semantic parsing layer for EpiCounty, a
@@ -323,6 +328,27 @@ that county's name, do not separately populate
 geographic_scope with that state.
 """
 
+        instructions += """
+
+For compound sex/age questions, sex/rurality or age/rurality questions, populate
+multidimensional with independent fixed filters and structured group_a/group_b.
+Use comparison_dimension sex, age, race_ethnicity, rurality or multiple.
+Never put 'women ages 40-44' in one label: fixed_sex=Female, group_a.age=40-44,
+group_b.age=60-64. For women versus men at 60-64, fixed_age=60-64 and sex groups.
+For Black women versus White men, retain BOTH changing sex and race fields.
+Use summarize_by_rurality for fixed female/male/age populations across RUCC.
+Retain rurality and county/state scope even if the combination is unsupported.
+Omit unstated fixed population totals, standardized age basis and years (null).
+RUCC 2023 is a classification timestamp, not a health observation year; do not
+put it in year unless the researcher separately requests that health year.
+Deterministic policy alone supplies any capability-specific defaults.
+Do not invent demographic IDs, function names, database paths or activation flags.
+When multidimensional is populated, leave legacy demographic_dimension null
+and demographic_groups empty; do not provide competing population encodings.
+Use multidimensional=null for legacy one-dimension comparisons or unstratified
+PLACES-IHME rurality questions. An understood new shape is NOT executable.
+"""
+
         try:
             response = self.client.responses.create(
                 model=self.model,
@@ -356,6 +382,7 @@ geographic_scope with that state.
             return SemanticAnalysisRequest(
                 question=question,
                 intent=intent,
+                multidimensional=decode_multidimensional(parsed.get("multidimensional")),
                 confidence=float(
                     parsed["confidence"]
                 ),

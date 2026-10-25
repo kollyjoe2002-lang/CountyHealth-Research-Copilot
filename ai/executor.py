@@ -55,6 +55,14 @@ APPROVED_FUNCTIONS: dict[str, Callable[..., pd.DataFrame]] = {
 }
 
 
+# Explicit guarded mappings, separate from the legacy public executable surface.
+from app.multidimensional import compare_strata, summarize_by_rurality
+MULTIDIMENSIONAL_FUNCTIONS = {
+    "compare_strata": compare_strata,
+    "summarize_by_rurality": summarize_by_rurality,
+}
+
+
 NON_EXECUTABLE_OPERATIONS = {
     "resolve_cause",
     "resolve_county",
@@ -248,6 +256,7 @@ def _evidence_title(
 
 def execute_plan(
     plan: AnalysisPlan,
+    *, fixture_context=None,
 ) -> EvidenceBundle:
     """
     Execute only approved, fully resolved analytics steps.
@@ -260,6 +269,19 @@ def execute_plan(
     The filtered result replaces the unfiltered evidence item so downstream
     interpretation receives only the requested analytical period.
     """
+    if plan.resolved_context.get("multidimensional"):
+        from ai.multidimensional_integration import validate_execution
+        from ai.multidimensional_evidence import evidence_bundle
+        try:
+            query = validate_execution(plan, fixture_context)
+            function = MULTIDIMENSIONAL_FUNCTIONS.get(plan.steps[0].function_name)
+            if function is None:
+                raise ExecutionError("Multidimensional function is not explicitly allowlisted")
+            result = function(query, database_path=fixture_context.validate(execution=True))
+            return evidence_bundle(result, plan)
+        except Exception as exc:
+            raise ExecutionError(f"Guarded multidimensional execution failed: {exc}") from exc
+
     if plan.unresolved_items:
         raise ExecutionError(
             "The plan contains unresolved items: "
