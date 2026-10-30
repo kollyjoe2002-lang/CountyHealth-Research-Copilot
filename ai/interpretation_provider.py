@@ -50,7 +50,7 @@ class DeterministicInterpretationProvider(
         self,
         interpretation_input: InterpretationInput,
     ) -> InterpretationResult:
-        from ai.models import InterpretationStatement
+        from ai.models import GroundedAnswer, InterpretationStatement
 
         if not interpretation_input.claims:
             raise InterpretationProviderError(
@@ -67,9 +67,15 @@ class DeterministicInterpretationProvider(
             for claim in interpretation_input.claims
         ]
 
-        direct_answer = " ".join(
-            claim.text
-            for claim in interpretation_input.claims[:2]
+        direct_answer = GroundedAnswer(
+            text=" ".join(
+                claim.text
+                for claim in interpretation_input.claims[:2]
+            ),
+            supporting_claim_ids=[
+                claim.claim_id
+                for claim in interpretation_input.claims[:2]
+            ],
         )
 
         return InterpretationResult(

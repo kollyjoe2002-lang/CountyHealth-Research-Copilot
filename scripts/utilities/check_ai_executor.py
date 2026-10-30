@@ -36,7 +36,7 @@ TEST_CASES = [
         ),
         "expected_evidence_items": 1,
         "expected_source_functions": {
-            "filter_dataframe",
+            "get_cause_trend",
         },
     },
     {
