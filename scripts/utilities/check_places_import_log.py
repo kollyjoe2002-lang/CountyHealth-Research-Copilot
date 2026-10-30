@@ -47,9 +47,10 @@ def main():
         ) in rows:
             assert release_year in EXPECTED
             assert rows_imported == EXPECTED[release_year]
-            assert status == "success_backfilled"
-            assert started_at is None
+            assert status == "success"
+            assert started_at is not None
             assert completed_at is not None
+            assert completed_at >= started_at
             assert error_message is None
 
         print("PLACES import-log validation: PASS")
