@@ -2,15 +2,10 @@ from pathlib import Path
 
 import duckdb
 
+from app import data_access
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-DB_PATH = (
-    PROJECT_ROOT
-    / "database"
-    / "places"
-    / "places_integrated_test.duckdb"
-)
+DB_PATH = Path(data_access.DB_FILE).resolve()
 
 
 EXPECTED_RELEASES = {
@@ -89,7 +84,7 @@ def main() -> None:
             f"Integrated PLACES test database not found: {DB_PATH}"
         )
 
-    con = duckdb.connect(str(DB_PATH))
+    con = duckdb.connect(str(DB_PATH), read_only=True)
 
     try:
         total_rows = con.execute(

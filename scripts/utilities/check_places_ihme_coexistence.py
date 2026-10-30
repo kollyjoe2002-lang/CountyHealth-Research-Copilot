@@ -1,8 +1,9 @@
 from pathlib import Path
 import duckdb
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = PROJECT_ROOT / "database" / "places" / "countyhealth_places_integration_test.duckdb"
+from app import data_access
+
+DB_PATH = Path(data_access.DB_FILE).resolve()
 
 EXPECTED_IHME_BURDEN_ROWS = 689_763_368
 EXPECTED_PLACES_ROWS = 644_297
