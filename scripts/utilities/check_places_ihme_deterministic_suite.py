@@ -2,6 +2,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from app import data_access
+
 
 CHECKS = [
     "check_places_ihme_county_context.py",
@@ -32,8 +34,18 @@ def main():
         print(check)
         print("=" * 72)
 
+        worker = utilities_dir / "release_gate_worker.py"
+        warehouse = Path(data_access.DB_FILE).resolve()
+
         result = subprocess.run(
-            [sys.executable, str(path)],
+            [
+                sys.executable,
+                str(worker),
+                str(path.relative_to(utilities_dir.parent.parent)),
+                str(warehouse),
+                "-",
+                "-",
+            ],
             text=True,
         )
 
