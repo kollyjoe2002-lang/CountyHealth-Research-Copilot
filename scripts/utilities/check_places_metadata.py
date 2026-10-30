@@ -1,12 +1,11 @@
-from scripts.places.load_metadata import (
-    CARRY_FORWARD_2025,
-    build_measure_catalog,
-    build_measure_versions,
-    build_releases,
-    load_dictionary,
-    DEFAULT_DICTIONARY,
-)
+from pathlib import Path
 
+import duckdb
+
+from app import data_access
+
+
+DB_PATH = Path(data_access.DB_FILE).resolve()
 
 EXPECTED_COUNTS = {
     2020: 28,
@@ -17,147 +16,212 @@ EXPECTED_COUNTS = {
     2025: 40,
 }
 
+CARRY_FORWARD_2025 = {
+    "COLON_SCREEN",
+    "DENTAL",
+    "MAMMOUSE",
+    "SLEEP",
+    "TEETHLOST",
+}
+
 
 def main() -> None:
-    dictionary = load_dictionary(DEFAULT_DICTIONARY)
+    if not DB_PATH.exists():
+        raise FileNotFoundError(
+            f"Qualification warehouse not found: {DB_PATH}"
+        )
 
-    measures = build_measure_catalog(dictionary)
-    versions = build_measure_versions(dictionary)
-    releases = build_releases()
+    con = duckdb.connect(str(DB_PATH), read_only=True)
 
-    # ---------------------------------------------------------
-    # Canonical catalog
-    # ---------------------------------------------------------
+    try:
+        # ---------------------------------------------------------
+        # Canonical catalog
+        # ---------------------------------------------------------
+        measure_count = con.execute(
+            "SELECT COUNT(*) FROM places.measures"
+        ).fetchone()[0]
 
-    assert len(measures) == 45, (
-        f"Expected 45 canonical measures, got {len(measures)}"
-    )
+        assert measure_count == 45, (
+            f"Expected 45 canonical measures, got {measure_count}"
+        )
 
-    assert measures["measure_id"].is_unique, (
-        "Canonical measure IDs are not unique"
-    )
+        unique_measure_count = con.execute(
+            """
+            SELECT COUNT(DISTINCT measure_id)
+            FROM places.measures
+            """
+        ).fetchone()[0]
 
-    # ---------------------------------------------------------
-    # Releases
-    # ---------------------------------------------------------
+        assert unique_measure_count == measure_count, (
+            "Canonical measure IDs are not unique"
+        )
 
-    assert len(releases) == 6, (
-        f"Expected 6 releases, got {len(releases)}"
-    )
-
-    assert set(releases["release_year"]) == set(range(2020, 2026))
-
-    # ---------------------------------------------------------
-    # Measure versions
-    # ---------------------------------------------------------
-
-    counts = (
-        versions.groupby("release_year")
-        .size()
-        .to_dict()
-    )
-
-    assert counts == EXPECTED_COUNTS, (
-        f"Unexpected release counts: {counts}"
-    )
-
-    duplicate_versions = versions.duplicated(
-        subset=["release_year", "measure_id"]
-    )
-
-    assert not duplicate_versions.any(), (
-        "Duplicate release-year / measure-id rows found"
-    )
-
-    # ---------------------------------------------------------
-    # 2025 carry-forward validation
-    # ---------------------------------------------------------
-
-    versions_2025 = versions[
-        versions["release_year"] == 2025
-    ]
-
-    actual_carry_forward = set(
-        versions_2025.loc[
-            versions_2025["carry_forward"],
-            "measure_id",
+        # ---------------------------------------------------------
+        # Releases
+        # ---------------------------------------------------------
+        releases = [
+            row[0]
+            for row in con.execute(
+                """
+                SELECT release_year
+                FROM places.releases
+                ORDER BY release_year
+                """
+            ).fetchall()
         ]
-    )
 
-    assert actual_carry_forward == CARRY_FORWARD_2025, (
-        f"Unexpected 2025 carry-forward set: "
-        f"{sorted(actual_carry_forward)}"
-    )
+        assert releases == list(range(2020, 2026)), (
+            f"Unexpected releases: {releases}"
+        )
 
-    carry_forward_years = set(
-        versions_2025.loc[
-            versions_2025["carry_forward"],
-            "measurement_year",
-        ]
-    )
+        # ---------------------------------------------------------
+        # Measure versions
+        # ---------------------------------------------------------
+        counts = dict(
+            con.execute(
+                """
+                SELECT release_year, COUNT(*)
+                FROM places.measure_versions
+                GROUP BY release_year
+                ORDER BY release_year
+                """
+            ).fetchall()
+        )
 
-    assert carry_forward_years == {2022}
+        assert counts == EXPECTED_COUNTS, (
+            f"Unexpected release counts: {counts}"
+        )
 
-    current_years = set(
-        versions_2025.loc[
-            ~versions_2025["carry_forward"],
-            "measurement_year",
-        ]
-    )
+        duplicate_versions = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM (
+                SELECT
+                    release_year,
+                    measure_id,
+                    COUNT(*) AS n
+                FROM places.measure_versions
+                GROUP BY release_year, measure_id
+                HAVING COUNT(*) > 1
+            )
+            """
+        ).fetchone()[0]
 
-    assert current_years == {2023}
+        assert duplicate_versions == 0, (
+            "Duplicate release-year / measure-id rows found"
+        )
 
-    # ---------------------------------------------------------
-    # ISOLATION / LONELINESS boundary
-    # ---------------------------------------------------------
+        # ---------------------------------------------------------
+        # 2025 carry-forward validation
+        # ---------------------------------------------------------
+        carry_forward_rows = con.execute(
+            """
+            SELECT measure_id, measurement_year
+            FROM places.measure_versions
+            WHERE release_year = 2025
+              AND carry_forward
+            ORDER BY measure_id
+            """
+        ).fetchall()
 
-    isolation_years = set(
-        versions.loc[
-            versions["measure_id"] == "ISOLATION",
-            "release_year",
-        ]
-    )
+        actual_carry_forward = {
+            measure_id for measure_id, _ in carry_forward_rows
+        }
 
-    loneliness_years = set(
-        versions.loc[
-            versions["measure_id"] == "LONELINESS",
-            "release_year",
-        ]
-    )
+        assert actual_carry_forward == CARRY_FORWARD_2025, (
+            f"Unexpected 2025 carry-forward set: "
+            f"{sorted(actual_carry_forward)}"
+        )
 
-    assert isolation_years == {2024}
-    assert loneliness_years == {2025}
+        carry_forward_years = {
+            measurement_year
+            for _, measurement_year in carry_forward_rows
+        }
 
-    # ---------------------------------------------------------
-    # Measurement-year sanity
-    # ---------------------------------------------------------
+        assert carry_forward_years == {2022}, (
+            f"Unexpected carry-forward measurement years: "
+            f"{sorted(carry_forward_years)}"
+        )
 
-    assert versions["measurement_year"].notna().all()
+        current_years = {
+            row[0]
+            for row in con.execute(
+                """
+                SELECT DISTINCT measurement_year
+                FROM places.measure_versions
+                WHERE release_year = 2025
+                  AND NOT carry_forward
+                """
+            ).fetchall()
+        }
 
-    assert (
-        versions["measurement_year"]
-        <= versions["release_year"]
-    ).all()
+        assert current_years == {2023}, (
+            f"Unexpected current 2025 measurement years: "
+            f"{sorted(current_years)}"
+        )
+
+        # ---------------------------------------------------------
+        # ISOLATION / LONELINESS boundary
+        # ---------------------------------------------------------
+        isolation_years = {
+            row[0]
+            for row in con.execute(
+                """
+                SELECT release_year
+                FROM places.measure_versions
+                WHERE measure_id = 'ISOLATION'
+                """
+            ).fetchall()
+        }
+
+        loneliness_years = {
+            row[0]
+            for row in con.execute(
+                """
+                SELECT release_year
+                FROM places.measure_versions
+                WHERE measure_id = 'LONELINESS'
+                """
+            ).fetchall()
+        }
+
+        assert isolation_years == {2024}
+        assert loneliness_years == {2025}
+
+        # ---------------------------------------------------------
+        # Measurement-year sanity
+        # ---------------------------------------------------------
+        bad_measurement_years = con.execute(
+            """
+            SELECT COUNT(*)
+            FROM places.measure_versions
+            WHERE measurement_year IS NULL
+               OR measurement_year > release_year
+            """
+        ).fetchone()[0]
+
+        assert bad_measurement_years == 0, (
+            f"Invalid measurement-year rows: {bad_measurement_years}"
+        )
+
+    finally:
+        con.close()
 
     print("=" * 70)
     print("PLACES metadata validation: PASS")
     print("=" * 70)
-
-    print("Canonical measures :", len(measures))
-    print("Measure versions   :", len(versions))
-    print("Releases           :", len(releases))
-
+    print(f"Canonical measures : {measure_count}")
+    print(f"Measure versions   : {sum(counts.values())}")
+    print(f"Releases           : {len(releases)}")
     print()
     print("Release counts:")
     for year, count in EXPECTED_COUNTS.items():
         print(f"{year}: {count}")
-
     print()
     print(
         "2025 carry-forward:",
         ", ".join(sorted(CARRY_FORWARD_2025)),
     )
-
     print("ISOLATION releases :", sorted(isolation_years))
     print("LONELINESS releases:", sorted(loneliness_years))
 
