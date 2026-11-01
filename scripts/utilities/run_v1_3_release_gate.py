@@ -31,9 +31,15 @@ check_v1_acceptance_suite check_places_semantic check_places_ihme_disparity_sema
 check_v1_question_matrix'''.split())
 ARCHIVE_INPUTS={'check_places_county_releases','check_places_2020_import','check_geojson_match'}
 
+NON_RELEASE_GATES={
+    'check_places_county_releases',
+    'check_places_2020_import',
+    'check_rucc_2023',
+}
+
 
 def row(gate,status,reason,**extra):
-    return dict(gate=gate,status=status,reason=reason,release_required=True,**extra)
+    return dict(gate=gate,status=status,reason=reason,release_required=gate not in NON_RELEASE_GATES,**extra)
 
 
 def main():
