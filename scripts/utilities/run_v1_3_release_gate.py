@@ -27,7 +27,8 @@ API_ONLY={'check_ai_entailment_judge','check_semantic_parser','check_v1_3_live_s
 API_AND_DATA=set('''check_semantic_full_chain check_semantic_stress_matrix check_ai_full_chain_all_intents
 check_ai_full_interpretation_chain check_ai_openai_interpretation check_ai_research_assistant
 check_research_telemetry check_telemetry_store check_v1_streamlit_integration check_v1_ui_error_states
-check_v1_acceptance_suite'''.split())
+check_v1_acceptance_suite check_places_semantic check_places_ihme_disparity_semantic
+check_v1_question_matrix'''.split())
 ARCHIVE_INPUTS={'check_places_county_releases','check_places_2020_import','check_geojson_match'}
 
 
