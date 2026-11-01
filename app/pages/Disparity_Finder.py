@@ -1067,8 +1067,10 @@ else:
     st.caption(
         "Map coverage note: 3,112 of 3,124 analytical county-level "
         "geographies have a matching or validated equivalent polygon in "
-        "the bundled GeoJSON boundary file. Twelve historical or retired "
-        "county-equivalent geographies remain available in analytical "
+        "the bundled GeoJSON boundary file. Twelve analytical geographies "
+        "do not have a valid one-to-one polygon in the bundled boundary "
+        "file; these include historical or retired geographies and "
+        "split-successor geographies. They remain available in analytical "
         "tables and results but are not drawn on the map."
     )
     
