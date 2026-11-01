@@ -16,9 +16,17 @@ print("=" * 80)
 print("\nCauses present in PAF but absent from BURDEN summary")
 print(
     con.execute("""
-        SELECT DISTINCT p.cause_id, p.cause_name
-        FROM analytics.county_paf_summary AS p
-        LEFT JOIN analytics.county_burden_summary AS b
+        WITH paf_causes AS (
+            SELECT DISTINCT cause_id, cause_name
+            FROM analytics.county_paf_summary
+        ),
+        burden_causes AS (
+            SELECT DISTINCT cause_id
+            FROM analytics.county_burden_summary
+        )
+        SELECT p.cause_id, p.cause_name
+        FROM paf_causes AS p
+        LEFT JOIN burden_causes AS b
             ON p.cause_id = b.cause_id
         WHERE b.cause_id IS NULL
         ORDER BY p.cause_name
