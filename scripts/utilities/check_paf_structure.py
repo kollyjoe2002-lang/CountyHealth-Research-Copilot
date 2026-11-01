@@ -1,153 +1,134 @@
+"""
+Inspect the structure and coverage of the county-level IHME PAF table.
+
+The large PAF table is profiled in one aggregate scan. This preserves the
+original structural diagnostics without repeatedly scanning hundreds of
+millions of rows.
+"""
+
 from pathlib import Path
+
 import duckdb
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DB_FILE = PROJECT_ROOT / "database" / "countyhealth.duckdb"
+from app import data_access
 
-con = duckdb.connect(str(DB_FILE), read_only=True)
 
-print("=" * 70)
-print("County PAF Structure Check")
-print("=" * 70)
+DB_FILE = Path(data_access.DB_FILE).resolve()
 
-# --------------------------------------------------------------------
-# Row count
-# --------------------------------------------------------------------
-print("\nRow count")
-print(
-    con.execute("""
-        SELECT COUNT(*) AS rows
-        FROM ihme.paf
-    """).fetchdf()
-)
 
-# --------------------------------------------------------------------
-# Year coverage
-# --------------------------------------------------------------------
-print("\nYear coverage")
-print(
-    con.execute("""
-        SELECT
-            MIN(year) AS first_year,
-            MAX(year) AS last_year,
-            COUNT(DISTINCT year) AS years
-        FROM ihme.paf
-    """).fetchdf()
-)
+def main() -> None:
+    if not DB_FILE.exists():
+        raise FileNotFoundError(
+            f"Qualification warehouse not found: {DB_FILE}"
+        )
 
-# --------------------------------------------------------------------
-# Causes
-# --------------------------------------------------------------------
-print("\nCauses")
-print(
-    con.execute("""
-        SELECT
-            COUNT(DISTINCT cause_name) AS distinct_causes
-        FROM ihme.paf
-    """).fetchdf()
-)
+    con = duckdb.connect(str(DB_FILE), read_only=True)
 
-print(
-    con.execute("""
-        SELECT DISTINCT cause_name
-        FROM ihme.paf
-        ORDER BY cause_name
-    """).fetchdf()
-)
+    try:
+        print("=" * 70)
+        print("County PAF Structure Check")
+        print("=" * 70)
 
-# --------------------------------------------------------------------
-# Measures
-# --------------------------------------------------------------------
-print("\nMeasures")
-print(
-    con.execute("""
-        SELECT DISTINCT measure_name
-        FROM ihme.paf
-        ORDER BY measure_name
-    """).fetchdf()
-)
+        profile = con.execute(
+            """
+            SELECT
+                COUNT(*) AS rows,
+                MIN(year) AS first_year,
+                MAX(year) AS last_year,
+                COUNT(DISTINCT year) AS years,
+                COUNT(DISTINCT cause_name) AS distinct_causes,
+                LIST(DISTINCT cause_name ORDER BY cause_name)
+                    AS causes,
+                LIST(DISTINCT measure_name ORDER BY measure_name)
+                    AS measures,
+                LIST(DISTINCT metric_name ORDER BY metric_name)
+                    AS metrics,
+                LIST(DISTINCT sex_name ORDER BY sex_name)
+                    AS sexes,
+                LIST(DISTINCT race_name ORDER BY race_name)
+                    AS races,
+                LIST(DISTINCT age_name ORDER BY age_name)
+                    AS age_groups,
+                COUNT(DISTINCT location_id) AS locations,
+                COUNT(DISTINCT fips) AS fips_codes,
+                COUNT(*) FILTER (WHERE fips IS NULL)
+                    AS null_fips
+            FROM ihme.paf
+            """
+        ).fetchone()
 
-# --------------------------------------------------------------------
-# Metrics
-# --------------------------------------------------------------------
-print("\nMetrics")
-print(
-    con.execute("""
-        SELECT DISTINCT metric_name
-        FROM ihme.paf
-        ORDER BY metric_name
-    """).fetchdf()
-)
+        (
+            rows,
+            first_year,
+            last_year,
+            years,
+            distinct_causes,
+            causes,
+            measures,
+            metrics,
+            sexes,
+            races,
+            age_groups,
+            locations,
+            fips_codes,
+            null_fips,
+        ) = profile
 
-# --------------------------------------------------------------------
-# Sexes
-# --------------------------------------------------------------------
-print("\nSexes")
-print(
-    con.execute("""
-        SELECT DISTINCT sex_name
-        FROM ihme.paf
-        ORDER BY sex_name
-    """).fetchdf()
-)
+        print("\nRow count")
+        print(rows)
 
-# --------------------------------------------------------------------
-# Races
-# --------------------------------------------------------------------
-print("\nRaces")
-print(
-    con.execute("""
-        SELECT DISTINCT race_name
-        FROM ihme.paf
-        ORDER BY race_name
-    """).fetchdf()
-)
+        print("\nYear coverage")
+        print(
+            f"first_year={first_year}, "
+            f"last_year={last_year}, "
+            f"years={years}"
+        )
 
-# --------------------------------------------------------------------
-# Age groups
-# --------------------------------------------------------------------
-print("\nAge groups")
-print(
-    con.execute("""
-        SELECT DISTINCT age_name
-        FROM ihme.paf
-        ORDER BY age_name
-    """).fetchdf()
-)
+        print("\nCauses")
+        print(f"distinct_causes={distinct_causes}")
+        for value in causes:
+            print(value)
 
-# --------------------------------------------------------------------
-# Geography
-# --------------------------------------------------------------------
-print("\nDistinct locations")
-print(
-    con.execute("""
-        SELECT
-            COUNT(DISTINCT location_id) AS locations,
-            COUNT(DISTINCT fips) AS fips_codes
-        FROM ihme.paf
-    """).fetchdf()
-)
+        print("\nMeasures")
+        for value in measures:
+            print(value)
 
-# --------------------------------------------------------------------
-# Null FIPS
-# --------------------------------------------------------------------
-print("\nNull FIPS")
-print(
-    con.execute("""
-        SELECT COUNT(*) AS rows
-        FROM ihme.paf
-        WHERE fips IS NULL
-    """).fetchdf()
-)
+        print("\nMetrics")
+        for value in metrics:
+            print(value)
 
-# --------------------------------------------------------------------
-# Column structure
-# --------------------------------------------------------------------
-print("\nPAF table columns")
-print(
-    con.execute("""
-        DESCRIBE ihme.paf
-    """).fetchdf()
-)
+        print("\nSexes")
+        for value in sexes:
+            print(value)
 
-con.close()
+        print("\nRaces")
+        for value in races:
+            print(value)
+
+        print("\nAge groups")
+        for value in age_groups:
+            print(value)
+
+        print("\nDistinct locations")
+        print(
+            f"locations={locations}, "
+            f"fips_codes={fips_codes}"
+        )
+
+        print("\nNull FIPS")
+        print(null_fips)
+
+        print("\nPAF table columns")
+        columns = con.execute(
+            "DESCRIBE ihme.paf"
+        ).fetchall()
+
+        for column in columns:
+            print(column)
+
+    finally:
+        con.close()
+
+
+if __name__ == "__main__":
+    main()
