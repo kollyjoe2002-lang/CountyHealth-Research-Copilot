@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ai.conversation_contracts import FailureReason
 from ai.models import AnalysisIntent
 from ai.research_assistant import (
     ResearchAssistantError,
     answer_research_question,
+    run_research_assistant,
 )
 
 
@@ -82,19 +84,42 @@ def main() -> None:
         print(f"{case.case_id}: {case.question}")
 
         try:
+            if not case.should_succeed:
+                outcome = run_research_assistant(
+                    case.question
+                )
+
+                if (
+                    outcome.status != "reject"
+                    or outcome.policy_result.failure_reason
+                    is not FailureReason.OPERATION_UNSUPPORTED
+                ):
+                    failures.append(
+                        f"{case.case_id}: expected structured "
+                        "OPERATION_UNSUPPORTED rejection, received "
+                        f"status={outcome.status!r}, "
+                        "failure_reason="
+                        f"{outcome.policy_result.failure_reason!r}."
+                    )
+                    print(
+                        "FAIL: expected structured "
+                        "unsupported-operation rejection"
+                    )
+                    continue
+
+                print("PASS: safely rejected")
+                print(
+                    "Reason:",
+                    outcome.policy_result.failure_reason.value,
+                )
+                passed += 1
+                continue
+
             interpretation_input, result = (
                 answer_research_question(
                     case.question
                 )
             )
-
-            if not case.should_succeed:
-                failures.append(
-                    f"{case.case_id}: expected safe rejection "
-                    "but the pipeline succeeded."
-                )
-                print("FAIL: expected rejection, received answer")
-                continue
 
             actual_intent = interpretation_input.intent
 
@@ -149,33 +174,14 @@ def main() -> None:
                 print("FAIL:", exc)
 
             else:
-                error_text = str(exc)
-
-                expected_rejection = (
-                    "The requested analytical operation is not "
-                    "supported by the current EpiCounty analytical engine."
+                failures.append(
+                    f"{case.case_id}: structured rejection path "
+                    f"raised unexpectedly: {exc}"
                 )
-
-                if expected_rejection not in error_text:
-                    failures.append(
-                        f"{case.case_id}: expected unsupported-capability "
-                        f"rejection, received a different failure: "
-                        f"{error_text}"
-                    )
-
-                    print(
-                        "FAIL: expected unsupported-capability rejection"
-                    )
-                    print(
-                        "Actual failure:",
-                        error_text,
-                    )
-
-                    continue
-
-                print("PASS: safely rejected")
-                print("Reason:", error_text)
-                passed += 1
+                print(
+                    "FAIL: structured rejection path raised unexpectedly"
+                )
+                print("Actual failure:", exc)
 
     print()
     print("=" * 100)
