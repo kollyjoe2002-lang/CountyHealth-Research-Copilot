@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from ai.multidimensional_request import MULTIDIMENSIONAL_SCHEMA, decode_multidimensional
+from ai.multidimensional_request import MULTIDIMENSIONAL_SCHEMA, decode_multidimensional, normalize_multidimensional
 
 from ai.models import (
     AnalysisIntent,
@@ -374,6 +374,47 @@ PLACES-IHME rurality questions. An understood new shape is NOT executable.
             # domain contract when the model leaves it null.
             evidence_domain = parsed["evidence_domain"]
 
+            # Canonicalize fixed-population rurality summaries.
+            # The validated contract represents these as one fixed
+            # population summarized across RUCC adjacency groups,
+            # not as an explicit rurality group_a/group_b comparison.
+            multidimensional = parsed.get("multidimensional")
+
+            if (
+                isinstance(multidimensional, dict)
+                and multidimensional.get("operation")
+                == "summarize_by_rurality"
+            ):
+                group_a = multidimensional.get("group_a")
+                group_b = multidimensional.get("group_b")
+
+                def rurality_only(group):
+                    if group is None:
+                        return True
+                    if not isinstance(group, dict):
+                        return False
+                    return all(
+                        group.get(field) is None
+                        for field in (
+                            "sex",
+                            "age",
+                            "race_ethnicity",
+                        )
+                    )
+
+                if rurality_only(group_a) and rurality_only(group_b):
+                    multidimensional["comparison_dimension"] = None
+                    multidimensional["group_a"] = None
+                    multidimensional["group_b"] = None
+
+                    if (
+                        multidimensional.get("rurality_grouping")
+                        == "metro_nonmetro"
+                    ):
+                        multidimensional[
+                            "rurality_grouping"
+                        ] = "rucc_adjacency"
+
             if evidence_domain is None:
                 raw = question.raw_text.casefold()
 
@@ -408,10 +449,12 @@ PLACES-IHME rurality questions. An understood new shape is NOT executable.
                 parsed["intent"]
             )
 
-            return SemanticAnalysisRequest(
+            request = SemanticAnalysisRequest(
                 question=question,
                 intent=intent,
-                multidimensional=decode_multidimensional(parsed.get("multidimensional")),
+                multidimensional=decode_multidimensional(
+                    parsed.get("multidimensional")
+                ),
                 confidence=float(
                     parsed["confidence"]
                 ),
@@ -441,6 +484,40 @@ PLACES-IHME rurality questions. An understood new shape is NOT executable.
                 ),
                 explanation=parsed["explanation"],
             )
+
+            clarification = (
+                request.clarification_question or ""
+            ).casefold()
+
+            geography_clarification = any(
+                token in clarification
+                for token in (
+                    "county",
+                    "state",
+                    "geographic",
+                    "geography",
+                    "area",
+                    "region",
+                )
+            )
+
+            if (
+                request.multidimensional is not None
+                and request.needs_clarification
+                and geography_clarification
+                and request.county_name is None
+                and request.geographic_scope is None
+                and request.multidimensional.state_name is None
+            ):
+                try:
+                    normalize_multidimensional(request)
+                except Exception:
+                    pass
+                else:
+                    request.needs_clarification = False
+                    request.clarification_question = None
+
+            return request
 
         except Exception as exc:
             raise SemanticParserError(

@@ -204,16 +204,20 @@ def run_research_assistant(
         if conversation_mode and policy_result.decision is not RequestPolicyDecision.REJECT:
             from ai.conversation_state import conversation_preflight
             preflight = conversation_preflight(semantic_request)
-            clarification_text = (semantic_request.clarification_question or "").casefold()
-            slot_clarification = preflight and (
-                (preflight.failure_reason.value == "SOURCE_REQUIRED" and any(w in clarification_text for w in ("source", "places", "ihme"))) or
-                (preflight.failure_reason.value == "YEAR_REQUIRED" and "year" in clarification_text))
-            if semantic_request.needs_clarification and not slot_clarification:
+
+            # Conversational source/year slots are deterministic policy
+            # requirements. Model-generated clarification must not override
+            # these bounded preflight requirements.
+            if preflight is not None:
+                policy_result = preflight
+            elif semantic_request.needs_clarification:
                 from ai.models import RequestPolicyResult
-                policy_result = RequestPolicyResult(semantic_request, RequestPolicyDecision.CLARIFY,
-                    "Follow-up clarification is required", clarification_question=semantic_request.clarification_question)
-            else:
-                policy_result = preflight or policy_result
+                policy_result = RequestPolicyResult(
+                    semantic_request,
+                    RequestPolicyDecision.CLARIFY,
+                    "Follow-up clarification is required",
+                    clarification_question=semantic_request.clarification_question,
+                )
 
         if (
             policy_result.decision
