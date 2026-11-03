@@ -368,6 +368,35 @@ PLACES-IHME rurality questions. An understood new shape is NOT executable.
                 response.output_text
             )
 
+            # Enforce explicit evidence-system cues deterministically.
+            # The model still determines semantic intent and entities;
+            # this normalization only applies the documented evidence
+            # domain contract when the model leaves it null.
+            evidence_domain = parsed["evidence_domain"]
+
+            if evidence_domain is None:
+                raw = question.raw_text.casefold()
+
+                places_cue = (
+                    "places" in raw
+                    or "prevalence" in raw
+                    or "modeled prevalence" in raw
+                )
+
+                ihme_cue = (
+                    "ihme" in raw
+                    or "yll" in raw
+                    or "years of life lost" in raw
+                    or "burden" in raw
+                )
+
+                if places_cue and ihme_cue:
+                    evidence_domain = "PLACES_IHME"
+                elif places_cue:
+                    evidence_domain = "PLACES"
+                elif ihme_cue:
+                    evidence_domain = "IHME"
+
         except Exception as exc:
             raise SemanticParserError(
                 "Semantic parsing failed: "
@@ -402,7 +431,7 @@ PLACES-IHME rurality questions. An understood new shape is NOT executable.
                     parsed["geographic_scope"]
                 ),
                 evidence_domain=(
-                    parsed["evidence_domain"]
+                    evidence_domain
                 ),
                 needs_clarification=bool(
                     parsed["needs_clarification"]
