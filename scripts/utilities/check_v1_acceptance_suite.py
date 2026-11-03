@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
@@ -106,6 +111,10 @@ CHECKS = [
 
 def run_check(
     check: AcceptanceCheck,
+    *,
+    warehouse: Path,
+    auxiliary_databases_json: Path | None,
+    geojson: Path | None,
 ) -> tuple[bool, float]:
     print("\n" + "=" * 88)
     print(f"CHECK: {check.name}")
@@ -125,13 +134,37 @@ def run_check(
 
     started = time.perf_counter()
 
+    target = ROOT / (
+        check.module.replace(".", "/") + ".py"
+    )
+
+    worker = (
+        ROOT
+        / "scripts"
+        / "utilities"
+        / "release_gate_worker.py"
+    )
+
     completed = subprocess.run(
         [
             sys.executable,
-            "-m",
-            check.module,
+            str(worker),
+            str(target.relative_to(ROOT)),
+            str(warehouse),
+            (
+                str(auxiliary_databases_json)
+                if auxiliary_databases_json is not None
+                else "-"
+            ),
+            (
+                str(geojson)
+                if geojson is not None
+                else "-"
+            ),
         ],
         check=False,
+        cwd=ROOT,
+        env=os.environ.copy(),
     )
 
     duration = (
@@ -158,6 +191,34 @@ def run_check(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the V1 acceptance suite against an explicitly "
+            "supplied read-only development warehouse."
+        )
+    )
+    parser.add_argument(
+        "--warehouse",
+        type=Path,
+        required=True,
+    )
+    parser.add_argument(
+        "--auxiliary-databases-json",
+        type=Path,
+    )
+    parser.add_argument(
+        "--geojson",
+        type=Path,
+    )
+    args = parser.parse_args()
+
+    warehouse = args.warehouse.resolve()
+
+    if not warehouse.is_file():
+        raise SystemExit(
+            "BLOCKED: explicit development warehouse missing"
+        )
+
     print("=" * 88)
     print("EpiCounty V1 Acceptance Suite")
     print("=" * 88)
@@ -177,7 +238,10 @@ def main() -> None:
 
     for check in CHECKS:
         passed, duration = run_check(
-            check
+            check,
+            warehouse=warehouse,
+            auxiliary_databases_json=args.auxiliary_databases_json,
+            geojson=args.geojson,
         )
 
         results.append(

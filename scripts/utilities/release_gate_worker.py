@@ -80,8 +80,39 @@ def main():
     import ai.research_assistant as assistant
     assistant.persist_research_telemetry=lambda *args,**kwargs: None
     try:
-        sys.argv=[target]+(['--warehouse',str(explicit)] if Path(target).stem=='check_v1_3_live_semantics' else [])
-        runpy.run_path(str(ROOT/target),run_name='__main__')
+        stem = Path(target).stem
+
+        if stem == 'check_v1_3_live_semantics':
+            sys.argv = [
+                target,
+                '--warehouse',
+                str(explicit),
+            ]
+        elif stem == 'check_v1_acceptance_suite':
+            sys.argv = [
+                target,
+                '--warehouse',
+                str(explicit),
+            ]
+
+            if extra and extra[0] != '-':
+                sys.argv.extend([
+                    '--auxiliary-databases-json',
+                    str(Path(extra[0]).resolve()),
+                ])
+
+            if len(extra) > 1 and extra[1] != '-':
+                sys.argv.extend([
+                    '--geojson',
+                    str(Path(extra[1]).resolve()),
+                ])
+        else:
+            sys.argv = [target]
+
+        runpy.run_path(
+            str(ROOT / target),
+            run_name='__main__',
+        )
     except BlockedPrerequisite:
         print('BLOCKED: auxiliary database input is not explicitly supplied')
         raise SystemExit(2)
