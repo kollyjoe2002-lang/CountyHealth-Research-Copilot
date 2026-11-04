@@ -1010,9 +1010,17 @@ def resolve_demographic_groups(
             "black people": "Non-Latino, Black",
             "african american": "Non-Latino, Black",
             "african americans": "Non-Latino, Black",
+            "non-latino black": "Non-Latino, Black",
             "white": "Non-Latino, White",
             "white people": "Non-Latino, White",
             "whites": "Non-Latino, White",
+            "non-latino white": "Non-Latino, White",
+            "non-latino american indian or alaska native": (
+                "Non-Latino, American Indian or Alaska Native"
+            ),
+            "non-latino asian or pacific islander": (
+                "Non-Latino, Asian or Pacific Islander"
+            ),
             "latino": "Latino, Any race",
             "latinos": "Latino, Any race",
             "hispanic": "Latino, Any race",
