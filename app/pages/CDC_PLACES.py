@@ -11,6 +11,7 @@ from app import research_catalogs as catalog
 from app import research_controls as controller
 from app.research_widgets import selector, show_provenance, infrastructure_message
 from ai.capabilities import REGISTRY_VERSION
+from ai.report_writer import PLACES_TREND_LIMITATION
 
 st.set_page_config(page_title='CDC PLACES', page_icon='🏥', layout='wide')
 
@@ -65,6 +66,7 @@ def main():
             if ready and not years:
                 st.warning('No measurement years satisfy this county/measure policy. Execution is disabled.')
             st.caption('History retains release years and carry-forward flags. Carry-forward observations are not independent new measurements. The page measurement-year policy is 2018–2023.')
+            st.warning(PLACES_TREND_LIMITATION)
             if st.button('Run trend', type='primary', disabled=not ready or not selected):
                 frame = controller.places_trend(county, measure, selected)
                 if frame.empty:

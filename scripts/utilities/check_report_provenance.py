@@ -9,6 +9,7 @@ from ai.models import (
     ResearchReport,
 )
 from ai.report_writer import (
+    PLACES_TREND_LIMITATION,
     _limitations,
     _methods_text,
 )
@@ -78,7 +79,7 @@ def main() -> int:
     print("=" * 100)
 
     passed = 0
-    total = 6
+    total = 7
 
     # ------------------------------------------------------------------
     # R01: IHME-only report remains IHME-specific.
@@ -307,6 +308,47 @@ def main() -> int:
     else:
         print(
             "R06 FAIL: cross-source causal guardrail is missing."
+        )
+
+    # ------------------------------------------------------------------
+    # R07: PLACES trend output carries CDC's change-over-time caution,
+    # and non-trend output does not.
+    # ------------------------------------------------------------------
+    places_trend_report = _report(
+        _bundle(
+            intent=AnalysisIntent.TREND_COMPARISON,
+            evidence_domain="PLACES",
+        )
+    )
+
+    ihme_trend_report = _report(
+        _bundle(
+            intent=AnalysisIntent.TREND_COMPARISON,
+            evidence_domain="IHME",
+        )
+    )
+
+    if (
+        PLACES_TREND_LIMITATION in trend_report.limitations
+        and PLACES_TREND_LIMITATION in places_trend_report.limitations
+        and PLACES_TREND_LIMITATION not in rurality_report.limitations
+        and PLACES_TREND_LIMITATION not in ihme_trend_report.limitations
+        and _contains_all(
+            PLACES_TREND_LIMITATION,
+            [
+                "CDC",
+                "do not support",
+                "changes over time",
+            ],
+        )
+    ):
+        print(
+            "R07 PASS: PLACES trend reports carry the CDC change-over-time caution."
+        )
+        passed += 1
+    else:
+        print(
+            "R07 FAIL: PLACES trend caution is missing or misapplied."
         )
 
     print("=" * 100)

@@ -188,6 +188,17 @@ def _methods_text(
     )
 
 
+# CDC's PLACES guidance says the model-based estimates do not support
+# tracking change over time at the local level. Any output that sets PLACES
+# values from different measurement years side by side must carry this.
+PLACES_TREND_LIMITATION = (
+    "CDC states that PLACES model-based estimates do not support "
+    "tracking changes over time at the local level. Differences in "
+    "PLACES prevalence between measurement years are descriptive and "
+    "should not be interpreted as an established county trend."
+)
+
+
 def _limitations(
     bundle: EvidenceBundle,
 ) -> list[str]:
@@ -262,6 +273,12 @@ def _limitations(
             "The analysis should be interpreted alongside the original "
             "IHME data-release documentation."
         )
+
+    if (
+        bundle.intent == AnalysisIntent.TREND_COMPARISON
+        and evidence_domain in {"PLACES", "PLACES_IHME"}
+    ):
+        limitations.append(PLACES_TREND_LIMITATION)
 
     if bundle.intent == AnalysisIntent.DEMOGRAPHIC_DISPARITY:
         group_b_name = str(
